@@ -1,26 +1,292 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Design tokens (from docs/design mockups). Components must use these
+ * via Tailwind utilities (bg-bg, text-muted, border-hairline, ...)
+ * rather than raw color values.
+ */
+@theme {
+  --color-*: initial;
+
+  --color-bg: #070d14;
+  --color-bg-music: #03070b;
+  --color-surface: #0f1923;
+  --color-surface-raised: #16222e;
+
+  --color-text: #e8eef3;
+  --color-text-secondary: #c9d4dd;
+  --color-muted: #93a4b3;
+
+  --color-accent: #2fc7d9;
+  --color-on-accent: #04161b;
+  --color-star: #f4cf6a;
+  --color-danger: #ff8a8a;
+
+  --color-hairline: rgb(255 255 255 / 0.08);
+  --color-hairline-strong: rgb(255 255 255 / 0.16);
+  --color-scrim: rgb(7 13 20 / 0.92);
+  --color-overlay: rgb(255 255 255 / 0.06);
+  --color-overlay-strong: rgb(255 255 255 / 0.12);
+  --color-black: #000;
+  --color-white: #fff;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* Warm avatar fallback (nav avatar in mockups) */
+  --color-avatar: #e07a4f;
+
+  /* "Browse all" genre tiles (search): muted jewel tones that read on the dark theme. */
+  --color-tile-1: #1f6f78;
+  --color-tile-2: #6b3fa0;
+  --color-tile-3: #a3473a;
+  --color-tile-4: #2e6b3f;
+  --color-tile-5: #9a6b1f;
+  --color-tile-6: #3b4f9e;
+  --color-tile-7: #8e3567;
+  --color-tile-8: #45637a;
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 8px;
+  --radius-panel: 14px;
+
+  --tracking-display: -0.035em;
+
+  /* Card widths. Poster width comes from NEXT_PUBLIC_POSTER_WIDTH (lib/ui-config.ts → <html style>). */
+  --spacing-poster: var(--poster-width);
+  --spacing-landscape: 312px;
+  --spacing-album: 168px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html {
+    color-scheme: dark;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Tailwind v4 resets buttons to the default cursor; show the hand on
+     everything clickable (links already get it from the browser). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="tab"],
+  summary,
+  select:not(:disabled),
+  input[type="range"]:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  label:has(> input[type="checkbox"], > input[type="radio"]) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: default;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * "Jelly" theme: frosted, translucent glass (in the spirit of Apple's Liquid
+ * Glass). One recipe, three weights. Tune the whole app here.
+ *   jelly          bars & pill containers (nav, segmented controls)
+ *   jelly-panel    menus, popovers, floating cards (dimmer backdrop for dense text)
+ *   jelly-control  buttons, chips, small controls (hover glow, no heavy shadow)
+ *   jelly-flat     static glass (tags, labels, toggle groups): no drop shadow, no hover
+ *   jelly-solid    the glass look without backdrop-filter, for large panels over a flat
+ *                  background (blurring a flat colour is invisible but costly to repaint)
+ *   jelly-shell    same as `jelly`, but drawn on a ::before layer so glass children
+ *                  (e.g. the account menu inside the nav) can still blur the page.
+ *                  An element with backdrop-filter becomes a "backdrop root" and its
+ *                  descendants' backdrop-filter would only see the parent. Host must
+ *                  be positioned (fixed/absolute/relative).
+ */
+:root {
+  --jelly-blur: 24px;
+  --jelly-saturate: 1.6;
+  /* Backdrop brightness behind the glass: lower = darker = more text contrast. */
+  --jelly-dim: 0.6;
+  --jelly-dim-panel: 0.72;
+  /* Panels (menus, popovers, cards): their own lighter recipe so the page stays
+     visible through them. Tint alpha = solidity (higher = more solid); blur =
+     how much detail survives (lower = clearer); haze = milkiness. */
+  --jelly-panel-tint: rgb(11 18 26 / 0.22);
+  --jelly-panel-blur: 12px;
+  --jelly-panel-haze-top: rgb(255 255 255 / 0.07);
+  --jelly-panel-haze-bottom: rgb(255 255 255 / 0.02);
+  /* Milky haze (the "fog"), lighter at the top like light hitting glass. */
+  --jelly-haze-top: rgb(255 255 255 / 0.12);
+  --jelly-haze-bottom: rgb(255 255 255 / 0.04);
+  --jelly-haze-hover-top: rgb(255 255 255 / 0.2);
+  --jelly-haze-hover-bottom: rgb(255 255 255 / 0.08);
+  /* Rim + specular highlight along the top edge, faint inner shadow at the bottom. */
+  --jelly-edge: rgb(255 255 255 / 0.16);
+  --jelly-specular: inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 -1px 0 rgb(255 255 255 / 0.04);
+  --jelly-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.8);
+  --jelly-shadow-panel: 0 24px 60px -16px rgb(0 0 0 / 0.85);
+}
+
+@utility jelly {
+  background-image: linear-gradient(to bottom, var(--jelly-haze-top), var(--jelly-haze-bottom));
+  border: 1px solid var(--jelly-edge);
+  box-shadow: var(--jelly-specular), var(--jelly-shadow);
+  -webkit-backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+  backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+}
+
+@utility jelly-solid {
+  background-image: linear-gradient(to bottom, var(--jelly-haze-top), var(--jelly-haze-bottom));
+  border: 1px solid var(--jelly-edge);
+  box-shadow: var(--jelly-specular);
+}
+
+@utility jelly-shell {
+  isolation: isolate;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background-image: linear-gradient(to bottom, var(--jelly-haze-top), var(--jelly-haze-bottom));
+    border: 1px solid var(--jelly-edge);
+    box-shadow: var(--jelly-specular), var(--jelly-shadow);
+    -webkit-backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+    backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+  }
+}
+
+@utility jelly-panel {
+  background-color: var(--jelly-panel-tint);
+  background-image: linear-gradient(to bottom, var(--jelly-panel-haze-top), var(--jelly-panel-haze-bottom));
+  border: 1px solid var(--jelly-edge);
+  box-shadow: var(--jelly-specular), var(--jelly-shadow-panel);
+  -webkit-backdrop-filter: blur(var(--jelly-panel-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim-panel));
+  backdrop-filter: blur(var(--jelly-panel-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim-panel));
+}
+
+@utility jelly-flat {
+  background-image: linear-gradient(to bottom, var(--jelly-haze-top), var(--jelly-haze-bottom));
+  border: 1px solid var(--jelly-edge);
+  box-shadow: var(--jelly-specular);
+  -webkit-backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+  backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+}
+
+@utility jelly-control {
+  background-image: linear-gradient(to bottom, var(--jelly-haze-top), var(--jelly-haze-bottom));
+  border: 1px solid var(--jelly-edge);
+  box-shadow: var(--jelly-specular);
+  -webkit-backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+  backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+  &:hover:not(:disabled) {
+    background-image: linear-gradient(to bottom, var(--jelly-haze-hover-top), var(--jelly-haze-hover-bottom));
+  }
+}
+
+/* Distance from the viewport bottom to the top of the music bar, measured
+   and set on <html> by <PlayerBar> (0 when no bar). */
+:root {
+  --player-space: 0px;
+}
+html[data-player] #main {
+  padding-bottom: calc(var(--player-space) + 0.75rem);
+}
+
+/* Playing-row equalizer bars. */
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Thin accent slider (player seek / volume): filled up to --pct. */
+.jelly-range {
+  --track: 4px;
+}
+.jelly-range::-webkit-slider-runnable-track {
+  height: var(--track);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) var(--pct),
+    var(--color-hairline-strong) var(--pct) var(--buf, 0%),
+    var(--color-overlay-strong) var(--buf, 0%)
+  );
+}
+.jelly-range::-moz-range-track {
+  height: var(--track);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) var(--pct),
+    var(--color-hairline-strong) var(--pct) var(--buf, 0%),
+    var(--color-overlay-strong) var(--buf, 0%)
+  );
+}
+.jelly-range::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: calc((var(--track) - 12px) / 2);
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-text);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.jelly-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-text);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.jelly-range:hover::-webkit-slider-thumb,
+.jelly-range:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+.jelly-range:hover::-moz-range-thumb,
+.jelly-range:focus-visible::-moz-range-thumb {
+  opacity: 1;
+}
+
+/* Responsive poster grid (CSS-only grids): auto-fill columns at
+   --poster-grid-min (≈92% of the poster width), min 2 on phones.
+   The library's JS grid uses posterColumns() in lib/ui-config.ts. */
+@utility poster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--poster-grid-min), calc(50% - 0.625rem)), 1fr));
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }

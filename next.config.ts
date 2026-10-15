@@ -7,13 +7,11 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
+  images: {
+    // Jellyfin resizes images itself; see lib/jellyfin/image-loader.ts.
+    loader: "custom",
+    loaderFile: "./lib/jellyfin/image-loader.ts",
+    qualities: [75, 80, 85],
   },
 };
 
