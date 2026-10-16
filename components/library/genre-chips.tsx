@@ -6,6 +6,7 @@ import { Chip } from "@/components/ui/chip";
 import { IconButton } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { Skeleton } from "@/components/ui/states";
+import { useDragScroll } from "@/lib/use-drag-scroll";
 
 interface GenreChipsProps {
   genres: string[];
@@ -26,6 +27,7 @@ const SCROLL_STEP = 240;
  */
 export function GenreChips({ genres, value, onChange, isPending, isError, onRetry }: GenreChipsProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  useDragScroll(scrollerRef);
   const [edges, setEdges] = useState({ start: false, end: false });
 
   const measure = useCallback(() => {

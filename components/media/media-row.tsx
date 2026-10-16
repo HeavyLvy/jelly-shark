@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { IconButton } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import { useDragScroll } from "@/lib/use-drag-scroll";
 
 interface MediaRowProps {
   title: ReactNode;
@@ -24,12 +25,13 @@ interface MediaRowProps {
 /**
  * Horizontal scroll row with a heading, optional "See all", and arrow
  * buttons that page by ~one viewport. Native scroll + snap, so touch and
- * trackpads work; arrows disable at the ends.
+ * trackpads work; mouse users can also click-and-drag. Arrows disable at the ends.
  */
 export function MediaRow({ title, subtitle, label, seeAllHref, action, children, className, gapClassName = "gap-4" }: MediaRowProps) {
   const headingId = useId();
   const scroller = useRef<HTMLUListElement>(null);
   const [edges, setEdges] = useState({ start: true, end: true });
+  useDragScroll(scroller);
 
   const update = useCallback(() => {
     const el = scroller.current;
@@ -88,7 +90,7 @@ export function MediaRow({ title, subtitle, label, seeAllHref, action, children,
       <ul
         ref={scroller}
         className={cn(
-          "flex snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 pb-2 scrollbar-none sm:scroll-px-8 sm:px-8 lg:scroll-px-11 lg:px-11",
+          "flex snap-x snap-mandatory scroll-px-4 overflow-x-auto overflow-y-hidden px-4 pb-2 scrollbar-none sm:scroll-px-8 sm:px-8 lg:scroll-px-11 lg:px-11",
           gapClassName,
         )}
       >

@@ -5,10 +5,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { ChevronRight } from "lucide-react";
-import { AlbumCardSkeleton, LandscapeCard, LandscapeCardSkeleton, PosterCard, PosterCardSkeleton, RankCard, RankCardSkeleton } from "@/components/media/cards";
+import { AlbumCardSkeleton, LandscapeCard, LandscapeCardSkeleton, PosterCard, PosterCardSkeleton } from "@/components/media/cards";
 import { MediaRow, RowItem } from "@/components/media/media-row";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { dotJoin, formatYears, isRecentlyAdded, typeLabel } from "@/lib/format";
 import { useSimilar } from "@/lib/queries/items";
@@ -17,17 +18,19 @@ import {
   useLastPlayedSeed,
   useLatestVideo,
   useNextUp,
+  useMostPopular,
   useResumeVideos,
-  useTopItems,
+  POPULAR_PERIODS,
   type Seed,
 } from "@/lib/queries/home";
+import { setPopularPeriod, usePopularPeriod } from "@/lib/popular-period";
 import { useNow } from "@/lib/use-now";
 
 const gutter = "px-4 sm:px-8 lg:px-11";
 
 /* ---------- shared row states ---------- */
 
-type CardShape = "poster" | "landscape" | "rank" | "album";
+type CardShape = "poster" | "landscape" | "album";
 
 function CardSkeleton({ shape }: { shape: CardShape }) {
   switch (shape) {
@@ -35,8 +38,6 @@ function CardSkeleton({ shape }: { shape: CardShape }) {
       return <LandscapeCardSkeleton />;
     case "album":
       return <AlbumCardSkeleton />;
-    case "rank":
-      return <RankCardSkeleton />;
     default:
       return <PosterCardSkeleton />;
   }
@@ -134,25 +135,33 @@ export function ContinueWatchingRow() {
   );
 }
 
-/* ---------- 2. Most Watched / Top Rated ---------- */
+/* ---------- 2. Most Popular ---------- */
 
-export function TopRowSkeleton() {
-  return <RowSkeleton shape="rank" count={7} gapClassName="gap-3" />;
+export function PopularRowSkeleton() {
+  return <RowSkeleton shape="poster" />;
 }
 
-export function TopRow() {
-  const top = useTopItems(10);
-  if (top.isPending) return <TopRowSkeleton />;
-  if (top.isError) return <RowError title="Most Watched in Your Library" onRetry={() => void top.refetch()} />;
-  const { mode, items } = top.data;
-  if (items.length === 0) return null;
+/** Your most-played movies and shows in a chosen period (default: past 2 weeks). */
+export function PopularRow() {
+  const period = usePopularPeriod();
+  const popular = useMostPopular(period);
+  const title = "Most Popular";
+  const periodLabel = POPULAR_PERIODS.find((p) => p.value === period)?.label.toLowerCase() ?? "";
+  const picker = <SelectMenu value={period} options={POPULAR_PERIODS} onChange={setPopularPeriod} label="Most popular in" size="sm" />;
+  if (popular.isPending) return <PopularRowSkeleton />;
+  if (popular.isError) return <RowError title={title} onRetry={() => void popular.refetch()} />;
+  const items = popular.data;
   return (
-    <MediaRow title={mode === "played" ? "Most Watched in Your Library" : "Top Rated in Your Library"} gapClassName="gap-3">
-      {items.map((item, i) => (
-        <RowItem key={item.Id}>
-          <RankCard item={item} rank={i + 1} />
-        </RowItem>
-      ))}
+    <MediaRow title={title} subtitle="What you've watched most" action={picker}>
+      {items.length === 0 ? (
+        <li className="py-6 text-sm text-muted">Nothing watched in the {periodLabel}. Try a longer period.</li>
+      ) : (
+        items.map((item) => (
+          <RowItem key={item.Id}>
+            <PosterCard item={item} subtitle={dotJoin(typeLabel(item), item.Type === "Series" ? formatYears(item) : item.ProductionYear)} />
+          </RowItem>
+        ))
+      )}
     </MediaRow>
   );
 }
@@ -249,7 +258,7 @@ function musicSubtitle(lastPlayed: number | null, now: Date | null): string {
 function MusicPanel({ children }: { children: ReactNode }) {
   return (
     <div className={gutter}>
-      <div className="jelly-panel rounded-panel py-6 sm:py-7 [&_section>div:first-child]:px-5 [&_ul]:scroll-px-5 [&_ul]:px-5 sm:[&_section>div:first-child]:px-6 sm:[&_ul]:px-6">
+      <div className="jelly-solid rounded-panel py-6 sm:py-7 [&_section>div:first-child]:px-5 [&_ul]:scroll-px-5 [&_ul]:px-5 sm:[&_section>div:first-child]:px-6 sm:[&_ul]:px-6">
         {children}
       </div>
     </div>

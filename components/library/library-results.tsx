@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { PosterCardSkeleton } from "@/components/media/cards";
@@ -11,8 +11,6 @@ import { useNow } from "@/lib/use-now";
 import { LibraryGridCard, LibraryListRow, ListHeader, ListRowSkeleton } from "./library-items";
 import { GRID_GAP_CLASS, LibraryGridSkeleton, LibraryListSkeleton } from "./library-skeleton";
 import { posterColumns } from "@/lib/ui-config";
-
-
 
 const COL_GAP = { sm: 16, lg: 20 };
 const ROW_GAP = 32;
@@ -97,6 +95,9 @@ function VirtualResults({ view, items, hasNextPage, isFetchingNextPage, isFetchN
     estimateSize: () => estimate,
     overscan: isGrid ? 2 : 8,
     scrollMargin,
+    // The default flushSync renders synchronously inside every scroll event,
+    // which made scrolling the grid janky; let React batch instead.
+    useFlushSync: false,
   });
 
   // Column count / view changes alter every row height.
@@ -130,21 +131,9 @@ function VirtualResults({ view, items, hasNextPage, isFetchingNextPage, isFetchN
             >
               {row ? (
                 isGrid ? (
-                  <div
-                    role="none"
-                    className={`grid ${GRID_GAP_CLASS}`}
-                    style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, paddingBottom: ROW_GAP }}
-                  >
-                    {row.map((item) => (
-                      <div role="listitem" key={item.Id}>
-                        <LibraryGridCard item={item} now={now} preload={vr.index === 0} />
-                      </div>
-                    ))}
-                  </div>
+                  <GridRow row={row} cols={cols} now={now} preload={vr.index === 0} />
                 ) : (
-                  <div role="listitem" className="border-b border-hairline py-1">
-                    <LibraryListRow item={row[0]} now={now} />
-                  </div>
+                  <ListRow item={row[0]} now={now} />
                 )
               ) : (
                 <LoaderRow
@@ -162,6 +151,27 @@ function VirtualResults({ view, items, hasNextPage, isFetchingNextPage, isFetchN
     </div>
   );
 }
+
+/* Memoized so the virtualizer's per-scroll re-render only touches rows whose items changed. */
+const GridRow = memo(function GridRow({ row, cols, now, preload }: { row: BaseItemDto[]; cols: number; now: Date | null; preload: boolean }) {
+  return (
+    <div role="none" className={`grid ${GRID_GAP_CLASS}`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, paddingBottom: ROW_GAP }}>
+      {row.map((item) => (
+        <div role="listitem" key={item.Id}>
+          <LibraryGridCard item={item} now={now} preload={preload} />
+        </div>
+      ))}
+    </div>
+  );
+});
+
+const ListRow = memo(function ListRow({ item, now }: { item: BaseItemDto; now: Date | null }) {
+  return (
+    <div role="listitem" className="border-b border-hairline py-1">
+      <LibraryListRow item={item} now={now} />
+    </div>
+  );
+});
 
 function LoaderRow({ isGrid, cols, failed, loading, onRetry }: { isGrid: boolean; cols: number; failed: boolean; loading: boolean; onRetry: () => void }) {
   if (failed) {

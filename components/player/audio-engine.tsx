@@ -252,9 +252,12 @@ export function AudioEngine() {
       try {
         reportStop();
         updateMetadata(cur);
-        const ok = await load(cur);
+        // Undo-close resumes where it left off.
+        const startAt = store.getState().resumeAt ?? 0;
+        if (startAt) store.setState({ resumeAt: null });
+        const ok = await load(cur, startAt);
         if (!ok || currentTrack(store.getState())?.uid !== cur.uid) return;
-        store.getState()._report({ currentTime: 0, duration: (cur.RunTimeTicks ?? 0) / TICKS_PER_SECOND, error: null });
+        store.getState()._report({ currentTime: startAt, duration: (cur.RunTimeTicks ?? 0) / TICKS_PER_SECOND, error: null });
         if (store.getState().playing) play();
       } finally {
         if (syncingUid === cur.uid) syncingUid = null;
@@ -267,7 +270,7 @@ export function AudioEngine() {
       if (loaded.uid !== cur.uid) unload();
       updateMetadata(cur);
       setPlaybackState("paused");
-      store.getState()._report({ currentTime: 0, duration: (cur.RunTimeTicks ?? 0) / TICKS_PER_SECOND, error: null });
+      store.getState()._report({ currentTime: store.getState().resumeAt ?? 0, duration: (cur.RunTimeTicks ?? 0) / TICKS_PER_SECOND, error: null });
     };
 
     /* ---------- element events ---------- */
@@ -338,7 +341,7 @@ export function AudioEngine() {
       });
       set("stop", () => {
         log("media key stop");
-        store.getState().stop();
+        store.getState().close();
       });
       set("previoustrack", () => store.getState().prev());
       set("nexttrack", () => store.getState().next());

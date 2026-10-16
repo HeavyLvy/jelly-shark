@@ -6,7 +6,7 @@ import { NowPlayingPanel } from "@/components/music/now-playing-panel";
 import { Skeleton } from "@/components/ui/states";
 
 /**
- * Spotify-style music shell: top bar (jellyfish menu · home + search ·
+ * Spotify-style music shell: top bar (shark logo menu · home + search ·
  * account) over three panels — library sidebar · page · now playing.
  *
  * Pinned to the viewport (top edge → player bar); the document never

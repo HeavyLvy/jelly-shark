@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, LibraryBig, Music2, Search, type LucideIcon } from "lucide-react";
-import { JellyGlyph } from "@/components/ui/logo";
+import { SharkGlyph } from "@/components/ui/logo";
 import { cn } from "@/components/ui/cn";
 import { UserMenu } from "./user-menu";
 
@@ -40,7 +40,7 @@ function NavShell({ activePath }: { activePath: string | null }) {
         aria-label="Jelly Shark home"
         className="flex size-9 items-center justify-center rounded-full text-accent"
       >
-        <JellyGlyph className="size-6" />
+        <SharkGlyph className="size-6" />
       </Link>
       {TABS.map((tab) => {
         const active = activePath !== null && tab.match(activePath);

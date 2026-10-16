@@ -127,6 +127,8 @@
   /* Backdrop brightness behind the glass: lower = darker = more text contrast. */
   --jelly-dim: 0.6;
   --jelly-dim-panel: 0.72;
+  /* Darkening equal to brightness(var(--jelly-dim)), for glass without a backdrop-filter. */
+  --jelly-inpage-tint: rgb(0 0 0 / 0.4);
   /* Panels (menus, popovers, cards): their own lighter recipe so the page stays
      visible through them. Tint alpha = solidity (higher = more solid); blur =
      how much detail survives (lower = clearer); haze = milkiness. */
@@ -185,20 +187,31 @@
   backdrop-filter: blur(var(--jelly-panel-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim-panel));
 }
 
+/* In-page glass (chips, buttons, tiles). No backdrop-filter: these scroll with
+   the page, and every blurred element re-blurs on each scrolled frame (measured:
+   ~20 of them dropped Home/Music scrolling to ~30fps). What's behind them is
+   mostly the flat page background, so a dark tint matching --jelly-dim reads
+   the same. Add `jelly-backdrop` where real frosting over imagery is worth it. */
 @utility jelly-flat {
+  background-color: var(--jelly-inpage-tint);
   background-image: linear-gradient(to bottom, var(--jelly-haze-top), var(--jelly-haze-bottom));
   border: 1px solid var(--jelly-edge);
   box-shadow: var(--jelly-specular);
+}
+
+/* Opt-in real frosting for a jelly-control / jelly-flat that floats over moving imagery (video controls). */
+@utility jelly-backdrop {
   -webkit-backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
   backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
+  /* The backdrop's brightness() already dims; drop the stand-in tint. */
+  --jelly-inpage-tint: transparent;
 }
 
 @utility jelly-control {
+  background-color: var(--jelly-inpage-tint);
   background-image: linear-gradient(to bottom, var(--jelly-haze-top), var(--jelly-haze-bottom));
   border: 1px solid var(--jelly-edge);
   box-shadow: var(--jelly-specular);
-  -webkit-backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
-  backdrop-filter: blur(var(--jelly-blur)) saturate(var(--jelly-saturate)) brightness(var(--jelly-dim));
   &:hover:not(:disabled) {
     background-image: linear-gradient(to bottom, var(--jelly-haze-hover-top), var(--jelly-haze-hover-bottom));
   }
@@ -211,6 +224,20 @@
 }
 html[data-player] #main {
   padding-bottom: calc(var(--player-space) + 0.75rem);
+}
+
+/* Lyrics instrumental gap: dots light at 5% / 33% / 66% of the gap (as in Spotify-style players). */
+@keyframes lyric-dot-0 {
+  0%, 4.9% { opacity: 0.35; transform: scale(1); }
+  5%, 100% { opacity: 1; transform: scale(1.12); }
+}
+@keyframes lyric-dot-1 {
+  0%, 32.9% { opacity: 0.35; transform: scale(1); }
+  33%, 100% { opacity: 1; transform: scale(1.12); }
+}
+@keyframes lyric-dot-2 {
+  0%, 65.9% { opacity: 0.35; transform: scale(1); }
+  66%, 100% { opacity: 1; transform: scale(1.12); }
 }
 
 /* Playing-row equalizer bars. */

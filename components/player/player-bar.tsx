@@ -13,10 +13,10 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
-  Square,
   Volume1,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { Spinner } from "@/components/ui/states";
@@ -34,10 +34,13 @@ function Slider({
   onCommit,
   label,
   valueText,
+  keyStep,
   className,
 }: {
   value: number;
   max: number;
+  /** Arrow-key step. step="any" would make the browser step by 1 (0 ↔ 100% on a 0–1 slider). */
+  keyStep: number;
   onChange: (v: number) => void;
   onCommit?: (v: number) => void;
   label: string;
@@ -56,7 +59,17 @@ function Slider({
       aria-valuetext={valueText}
       onChange={(e) => onChange(Number(e.target.value))}
       onPointerUp={(e) => onCommit?.(Number((e.target as HTMLInputElement).value))}
-      onKeyUp={(e) => onCommit?.(Number((e.target as HTMLInputElement).value))}
+      onKeyDown={(e) => {
+        const dir = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+        if (!dir) return;
+        e.preventDefault();
+        const v = Math.min(Math.max(0, value + dir * keyStep), max || 1);
+        onChange(v);
+        onCommit?.(v);
+      }}
+      onKeyUp={(e) => {
+        if (!e.key.startsWith("Arrow")) onCommit?.(Number((e.target as HTMLInputElement).value));
+      }}
       style={{ "--pct": `${pct}%` } as CSSProperties}
       className={cn(
         "jelly-range h-4 w-full cursor-pointer appearance-none bg-transparent",
@@ -99,6 +112,7 @@ function SeekBar({ compact }: { compact?: boolean }) {
         value={shown}
         max={duration}
         label="Seek"
+        keyStep={5}
         valueText={`${formatClock(shown)} of ${formatClock(duration)}`}
         onChange={setDrag}
         onCommit={(v) => {
@@ -142,7 +156,7 @@ function VolumeControl() {
             {pct}%
           </span>
         )}
-        <Slider value={muted ? 0 : volume} max={1} onChange={setVolume} label="Volume" valueText={`${pct}%`} />
+        <Slider value={muted ? 0 : volume} max={1} keyStep={0.05} onChange={setVolume} label="Volume" valueText={`${pct}%`} />
       </div>
     </div>
   );
@@ -164,7 +178,19 @@ export function PlayerBar() {
   const repeat = usePlayer((s) => s.repeat);
   const panel = usePlayer((s) => s.panel);
   const error = usePlayer((s) => s.error);
-  const { togglePlay, next, prev, toggleShuffle, cycleRepeat, setPanel, stop } = usePlayer.getState();
+  const { togglePlay, next, prev, toggleShuffle, cycleRepeat, setPanel } = usePlayer.getState();
+  // Close: slide the bar away, then clear the queue (the toast offers Undo).
+  const [leaving, setLeaving] = useState(false);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const close = () => {
+    if (leaving) return;
+    setLeaving(true);
+    closeTimer.current = window.setTimeout(() => {
+      usePlayer.getState().close();
+      setLeaving(false);
+    }, 220);
+  };
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   // Keyboard: Space = play/pause, ←/→ = seek 5s. Ignored while typing, on
   // focused controls that use those keys themselves, or with modifiers.
@@ -214,7 +240,7 @@ export function PlayerBar() {
     };
   }, [hasTrack]);
 
-  if (!track) return null;
+  if (!track) return <ClosedToast />;
 
   const RepeatIcon = repeat === "one" ? Repeat1 : Repeat;
   // Jellyfin's HasLyrics; unknown (e.g. an older restored queue) leaves the button enabled.
@@ -229,15 +255,18 @@ export function PlayerBar() {
       <section
         ref={barRef}
         aria-label="Music player"
-        className="jelly fixed inset-x-2 bottom-2 z-40 rounded-panel px-3 pt-2 pb-2 sm:inset-x-3 sm:bottom-3 md:px-4 md:py-2.5"
+        className={cn(
+          "jelly fixed inset-x-2 bottom-2 z-40 rounded-panel px-3 pt-2 pb-2 transition-[translate,opacity] duration-200 ease-in sm:inset-x-3 sm:bottom-3 md:px-4 md:py-2.5",
+          leaving && "pointer-events-none translate-y-[calc(100%+1rem)] opacity-0",
+        )}
       >
         {/* Phone: thin seek along the top edge */}
         <div className="md:hidden">
           <SeekBar compact />
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
-          {/* Now playing */}
-          <div className="flex min-w-0 items-center gap-3">
+          {/* Now playing. Hovering (or tabbing into) it reveals Close; paused keeps Close visible. */}
+          <div className="group/np -my-1 -ml-1.5 flex min-w-0 items-center gap-3 justify-self-start rounded-card py-1 pr-1.5 pl-1.5 transition-colors hover:bg-overlay focus-within:bg-overlay">
             {albumHref ? (
               <Link href={albumHref} aria-label={`Open album ${track.Album ?? ""}`} className="shrink-0">
                 <TrackArt item={track} size={56} className="size-12 md:size-14" />
@@ -252,6 +281,18 @@ export function PlayerBar() {
               </p>
             </div>
             <LikeButton item={track} className="hidden sm:inline-flex" />
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close player"
+              title="Close player"
+              className={cn(
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-overlay-strong text-text-secondary transition hover:text-text focus-visible:opacity-100",
+                playing ? "opacity-0 group-hover/np:opacity-100 group-focus-within/np:opacity-100" : "opacity-100",
+              )}
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
           </div>
 
           {/* Transport */}
@@ -292,9 +333,6 @@ export function PlayerBar() {
               >
                 <RepeatIcon className="size-[18px]" aria-hidden="true" />
               </button>
-              <button type="button" onClick={stop} aria-label="Stop and close player" title="Stop" className={cn(iconBtn, "hidden md:inline-flex")}>
-                <Square className="size-4 fill-current" aria-hidden="true" />
-              </button>
             </div>
             <div className="hidden w-full max-w-xl md:block">
               <SeekBar />
@@ -325,5 +363,25 @@ export function PlayerBar() {
         </div>
       </section>
     </>
+  );
+}
+
+/** After closing: "Playback closed · Undo" where the bar was, for a few seconds. */
+function ClosedToast() {
+  const closed = usePlayer((s) => s.closed);
+  const { undoClose, dismissClosed } = usePlayer.getState();
+  useEffect(() => {
+    if (!closed) return;
+    const t = window.setTimeout(dismissClosed, 6000);
+    return () => window.clearTimeout(t);
+  }, [closed, dismissClosed]);
+  if (!closed) return null;
+  return (
+    <div role="status" className="jelly-panel fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-4 rounded-full py-2 pr-2 pl-5 text-sm text-text shadow-lg sm:bottom-6">
+      Playback closed
+      <button type="button" onClick={undoClose} className="rounded-full px-3 py-1 font-semibold text-accent transition hover:bg-overlay">
+        Undo
+      </button>
+    </div>
   );
 }

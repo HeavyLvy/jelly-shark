@@ -1,6 +1,6 @@
 "use client";
 
-import type { BaseItemDto, BaseItemKind, ImageType, ItemFields } from "@jellyfin/sdk/lib/generated-client/models";
+import type { BaseItemDto, ImageType, ItemFields } from "@jellyfin/sdk/lib/generated-client/models";
 import { getLibraryApi } from "@jellyfin/sdk/lib/utils/api/library-api";
 import { getShowApi } from "@jellyfin/sdk/lib/utils/api/show-api";
 import { CARD_FIELDS, CARD_IMAGE_TYPES } from "@/lib/jellyfin/fields";
@@ -64,66 +64,67 @@ export function useLatestVideo() {
   });
 }
 
-export interface TopItems {
-  /** "played" when ranked by the user's play counts, "rated" when that history is empty. */
-  mode: "played" | "rated";
-  items: BaseItemDto[];
-}
+/* ---------- Most Popular (your plays in a period) ---------- */
 
-const TOP_TYPES: BaseItemKind[] = ["Movie", "Series"];
+export type PopularPeriod = "1w" | "2w" | "1m" | "3m" | "6m" | "1y";
+
+export const POPULAR_PERIODS: { value: PopularPeriod; label: string; days: number }[] = [
+  { value: "1w", label: "Past week", days: 7 },
+  { value: "2w", label: "Past 2 weeks", days: 14 },
+  { value: "1m", label: "Past month", days: 30 },
+  { value: "3m", label: "Past 3 months", days: 91 },
+  { value: "6m", label: "Past 6 months", days: 182 },
+  { value: "1y", label: "Past year", days: 365 },
+];
 
 /**
- * Most-played movies/series. A Series folder's own PlayCount stays 0, so
- * shows are scored by the plays of their episodes. Falls back to community
- * rating for users without history. The three lookups run in parallel.
+ * Movies and shows you played in the period, most-played first.
+ *
+ * Jellyfin only keeps per-user all-time play counts and the last played date
+ * (period counts need the Playback Reporting plugin), so: an item is in the
+ * period when its LastPlayedDate is; it's ranked by its PlayCount, which counts
+ * every start (episodes add up to their show), ties broken by most recently played.
  */
-export function useTopItems(limit = 10) {
-  return useJfQuery<TopItems>({
-    queryKey: [...jfKeys.home("top"), limit],
+export function useMostPopular(period: PopularPeriod, limit = 16) {
+  return useJfQuery<BaseItemDto[]>({
+    queryKey: [...jfKeys.home("popular"), period, limit],
     queryFn: async ({ signal }) => {
       const api = getLibraryApi(jf);
-      const base = { recursive: true, fields: CARD_FIELDS, enableTotalRecordCount: false, ...imageOpts };
-      const [playedMovies, playedEpisodes, rated] = await Promise.all([
-        api.getItems(
-          { ...base, includeItemTypes: ["Movie"], filters: ["IsPlayed"], sortBy: ["PlayCount", "SortName"], sortOrder: ["Descending", "Ascending"], limit },
-          { signal },
-        ),
-        api.getItems(
-          {
-            includeItemTypes: ["Episode"],
-            recursive: true,
-            filters: ["IsPlayed"],
-            enableImages: false,
-            enableUserData: true,
-            enableTotalRecordCount: false,
-            limit: 500,
-          },
-          { signal },
-        ),
-        api.getItems(
-          { ...base, includeItemTypes: TOP_TYPES, sortBy: ["CommunityRating", "SortName"], sortOrder: ["Descending", "Ascending"], limit },
-          { signal },
-        ),
-      ]);
+      const days = POPULAR_PERIODS.find((p) => p.value === period)?.days ?? 14;
+      const since = Date.now() - days * 86_400_000;
+      // Newest play first. No IsPlayed/IsResumable filter: a short play counts
+      // (PlayCount goes up on every start) but is neither finished nor resumable.
+      const { data: recent } = await api.getItems(
+        {
+          includeItemTypes: ["Movie", "Episode"],
+          recursive: true,
+          sortBy: ["DatePlayed"],
+          sortOrder: ["Descending"],
+          enableImages: false,
+          enableUserData: true,
+          enableTotalRecordCount: false,
+          limit: 500,
+        },
+        { signal },
+      );
 
-      const scores = new Map<string, number>();
-      for (const m of playedMovies.data.Items ?? []) {
-        if (m.Id) scores.set(m.Id, Math.max(1, m.UserData?.PlayCount ?? 0));
+      const scores = new Map<string, { plays: number; last: number }>();
+      for (const it of recent.Items ?? []) {
+        const last = it.UserData?.LastPlayedDate ? Date.parse(it.UserData.LastPlayedDate) : NaN;
+        // Sorted newest first: past the period (or never played) means done.
+        if (!(last >= since)) break;
+        const key = it.Type === "Episode" ? it.SeriesId : it.Id;
+        if (!key) continue;
+        const cur = scores.get(key) ?? { plays: 0, last: 0 };
+        scores.set(key, { plays: cur.plays + Math.max(1, it.UserData?.PlayCount ?? 0), last: Math.max(cur.last, last) });
       }
-      for (const ep of playedEpisodes.data.Items ?? []) {
-        if (ep.SeriesId) scores.set(ep.SeriesId, (scores.get(ep.SeriesId) ?? 0) + Math.max(1, ep.UserData?.PlayCount ?? 0));
-      }
-      if (scores.size === 0) return { mode: "rated", items: rated.data.Items ?? [] };
+      if (scores.size === 0) return [];
 
-      const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
-      const byId = new Map((playedMovies.data.Items ?? []).map((m) => [m.Id ?? "", m]));
-      const missing = ranked.map(([id]) => id).filter((id) => !byId.has(id));
-      if (missing.length > 0) {
-        const series = (await api.getItems({ ...base, ids: missing }, { signal })).data.Items ?? [];
-        for (const s of series) if (s.Id) byId.set(s.Id, s);
-      }
-      const items = ranked.flatMap(([id]) => byId.get(id) ?? []);
-      return { mode: "played", items };
+      const ranked = [...scores.entries()].sort((a, b) => b[1].plays - a[1].plays || b[1].last - a[1].last).slice(0, limit);
+      const ids = ranked.map(([id]) => id);
+      const { data } = await api.getItems({ ids, fields: CARD_FIELDS, enableTotalRecordCount: false, ...imageOpts }, { signal });
+      const byId = new Map((data.Items ?? []).map((i) => [i.Id ?? "", i]));
+      return ids.flatMap((id) => byId.get(id) ?? []);
     },
   });
 }

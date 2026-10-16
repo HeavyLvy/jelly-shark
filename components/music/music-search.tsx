@@ -1,9 +1,8 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
-import { getInstantMixApi } from "@jellyfin/sdk/lib/utils/api/instant-mix-api";
 import { AlbumCardSkeleton } from "@/components/media/cards";
 import { MediaRow, RowItem } from "@/components/media/media-row";
 import { GenreTiles, RecentSearches, SongList, SongListSkeleton, TopResultCard, TopResultSkeleton } from "@/components/search/search-bits";
@@ -11,11 +10,10 @@ import { Chip } from "@/components/ui/chip";
 import { cn } from "@/components/ui/cn";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { dotJoin } from "@/lib/format";
-import { jf } from "@/lib/jellyfin/client";
+import { Button } from "@/components/ui/button";
 import { useArtistAlbums, useArtistTopTracks } from "@/lib/queries/music";
-import { pickTopResult, useMusicGenres, useSearchGroup } from "@/lib/queries/search";
+import { fetchGenreTracks, pickTopResult, useMusicGenres, useSearchGroup } from "@/lib/queries/search";
 import { usePlayer } from "@/lib/player/store";
-import { useDebounced } from "@/lib/use-debounced";
 import { ArtistCardSkeleton, MusicAlbumCard, MusicArtistCard } from "./music-cards";
 import { TrackTable, TrackTableSkeleton } from "./track-table";
 import { useScrolledPast } from "./use-scrolled-past";
@@ -26,7 +24,9 @@ const FILTERS: Filter[] = ["all", "songs", "artists", "albums", "playlists"];
 /** Music search in the centre panel; the query comes from the top bar (?q=). */
 export function MusicSearch() {
   const params = useSearchParams();
-  const term = useDebounced((params.get("q") ?? "").trim(), 300);
+  // The top bar already waits for a typing pause before writing ?q=. Deferring
+  // lets React render new results in the background, so typing never waits on it.
+  const term = useDeferredValue((params.get("q") ?? "").trim());
   const [filter, setFilter] = useState<Filter>("all");
   const [sentinel, stuck] = useScrolledPast<HTMLDivElement>();
 
@@ -67,18 +67,23 @@ function mergeById(...lists: (BaseItemDto[] | undefined)[]): BaseItemDto[] {
 }
 const gridCls = "grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-x-4 gap-y-6";
 
+/** Genre tiles before "Show all" (sorted biggest first). */
+const GENRES_SHOWN = 24;
+
 function Browse() {
   const router = useRouter();
   const genres = useMusicGenres();
   const playItems = usePlayer((s) => s.playItems);
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const all = genres.data ?? [];
+  const shown = showAll ? all : all.slice(0, GENRES_SHOWN);
 
   const playGenre = async (g: BaseItemDto) => {
     if (!g.Id) return;
     setError(null);
     try {
-      const { data } = await getInstantMixApi(jf).getInstantMixFromMusicGenreById({ id: g.Id, limit: 60 });
-      const tracks = data.Items ?? [];
+      const tracks = await fetchGenreTracks(g);
       if (tracks.length === 0) setError(`No songs found for ${g.Name}.`);
       else playItems(tracks, 0, { label: `${g.Name} mix` });
     } catch {
@@ -101,7 +106,20 @@ function Browse() {
             {error}
           </p>
         )}
-        {genres.isError ? <ErrorState title="Couldn't load genres" /> : <GenreTiles genres={genres.data ?? []} loading={genres.isPending} onPick={(g) => void playGenre(g)} />}
+        {genres.isError ? (
+          <ErrorState title="Couldn't load genres" />
+        ) : (
+          <>
+            <GenreTiles genres={shown} loading={genres.isPending} onPick={(g) => void playGenre(g)} />
+            {all.length > GENRES_SHOWN && (
+              <div className="flex justify-center">
+                <Button variant="secondary" size="sm" onClick={() => setShowAll((v) => !v)}>
+                  {showAll ? "Show fewer" : `Show all ${all.length} genres`}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </section>
     </div>
   );

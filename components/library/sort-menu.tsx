@@ -1,129 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowDownWideNarrow, Check, ChevronDown } from "lucide-react";
-import { cn } from "@/components/ui/cn";
+import { ArrowDownWideNarrow } from "lucide-react";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { LIBRARY_SORTS, type LibrarySort } from "@/lib/queries/library";
-import { useDismiss } from "./use-dismiss";
 
 /** "Recently added ▾" button opening a single-select listbox. */
 export function SortMenu({ value, onChange }: { value: LibrarySort; onChange: (sort: LibrarySort) => void }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
-  const id = useId();
-  const close = useCallback(() => setOpen(false), []);
-  useDismiss(open, close, rootRef, buttonRef);
-
-  const current = LIBRARY_SORTS.find((s) => s.value === value) ?? LIBRARY_SORTS[0];
-
-  // Move focus to the selected option when the list opens.
-  useEffect(() => {
-    if (!open) return;
-    listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-  }, [open]);
-
-  const options = () => Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
-
-  const choose = (sort: LibrarySort) => {
-    setOpen(false);
-    buttonRef.current?.focus();
-    if (sort !== value) onChange(sort);
-  };
-
-  const onListKey = (e: KeyboardEvent<HTMLUListElement>) => {
-    const items = options();
-    const idx = items.indexOf(document.activeElement as HTMLElement);
-    const focusAt = (i: number) => items[(i + items.length) % items.length]?.focus();
-    switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        focusAt(idx + 1);
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        focusAt(idx - 1);
-        break;
-      case "Home":
-        e.preventDefault();
-        focusAt(0);
-        break;
-      case "End":
-        e.preventDefault();
-        focusAt(items.length - 1);
-        break;
-      case "Enter":
-      case " ": {
-        e.preventDefault();
-        const v = items[idx]?.dataset.value as LibrarySort | undefined;
-        if (v) choose(v);
-        break;
-      }
-      case "Tab":
-        setOpen(false);
-        break;
-    }
-  };
-
-  const onButtonKey = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      setOpen(true);
-    }
-  };
-
   return (
-    <div ref={rootRef} className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? `${id}-list` : undefined}
-        aria-label={`Sort by: ${current.label}`}
-        onClick={() => setOpen((o) => !o)}
-        onKeyDown={onButtonKey}
-        className={cn(
-          "jelly-control inline-flex h-10 items-center gap-2 rounded-card px-3 text-sm font-medium text-text transition sm:px-4",
-          open && "bg-overlay-strong",
-        )}
-      >
-        <ArrowDownWideNarrow className="size-4 text-text-secondary" aria-hidden="true" />
-        <span>{current.label}</span>
-        <ChevronDown className={cn("size-4 text-text-secondary transition", open && "rotate-180")} aria-hidden="true" />
-      </button>
-      {open && (
-        <ul
-          ref={listRef}
-          id={`${id}-list`}
-          role="listbox"
-          aria-label="Sort by"
-          onKeyDown={onListKey}
-          className="jelly-panel absolute right-0 z-30 mt-2 w-52 rounded-panel p-1.5"
-        >
-          {LIBRARY_SORTS.map((s) => {
-            const selected = s.value === value;
-            return (
-              <li
-                key={s.value}
-                role="option"
-                aria-selected={selected}
-                tabIndex={-1}
-                data-value={s.value}
-                onClick={() => choose(s.value)}
-                className={cn(
-                  "flex cursor-pointer items-center justify-between gap-3 rounded-card px-3 py-2 text-sm outline-offset-0 transition hover:bg-overlay focus-visible:bg-overlay",
-                  selected ? "font-semibold text-accent" : "text-text-secondary hover:text-text",
-                )}
-              >
-                {s.label}
-                {selected && <Check className="size-4" aria-hidden="true" />}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <SelectMenu
+      value={value}
+      options={LIBRARY_SORTS}
+      onChange={onChange}
+      label="Sort by"
+      icon={<ArrowDownWideNarrow className="size-4 text-text-secondary" aria-hidden="true" />}
+    />
   );
 }

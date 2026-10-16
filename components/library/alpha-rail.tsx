@@ -1,6 +1,8 @@
 "use client";
 
+import { useRef } from "react";
 import { cn } from "@/components/ui/cn";
+import { useDragScroll } from "@/lib/use-drag-scroll";
 import { LETTERS } from "@/lib/queries/library";
 
 function letterLabel(letter: string) {
@@ -26,9 +28,12 @@ export const RAIL_HORIZONTAL_CLASS = "lg:[@media(min-height:800px)]:hidden";
 
 export function AlphaRail({ value, onChange, orientation, className }: AlphaRailProps) {
   const vertical = orientation === "vertical";
+  const stripRef = useRef<HTMLUListElement>(null);
+  useDragScroll(stripRef);
   return (
     <nav aria-label="Filter by first letter" className={className}>
       <ul
+        ref={stripRef}
         className={cn(
           vertical
             ? "flex flex-col items-center"

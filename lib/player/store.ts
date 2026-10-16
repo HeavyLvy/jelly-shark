@@ -59,6 +59,10 @@ interface PlayerState {
   source: PlaySource | null;
   panel: PlayerPanel;
   seekRequest: { time: number; nonce: number } | null;
+  /** What close() cleared, for the "Playback closed · Undo" toast (not persisted). */
+  closed: ClosedSnapshot | null;
+  /** Position the engine should load the current track at (set by undoClose), then cleared. */
+  resumeAt: number | null;
 
   playItems: (items: BaseItemDto[], startIndex?: number, source?: PlaySource, opts?: { shuffle?: boolean }) => void;
   playNext: (items: BaseItemDto[]) => void;
@@ -74,6 +78,10 @@ interface PlayerState {
   pause: () => void;
   /** Stop playback and close the player (clears the queue). */
   stop: () => void;
+  /** Like stop(), but remembers what was playing so the user can undo. */
+  close: () => void;
+  undoClose: () => void;
+  dismissClosed: () => void;
   seek: (time: number) => void;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
@@ -83,6 +91,15 @@ interface PlayerState {
   setFavorite: (itemId: string, favorite: boolean) => void;
   /** Engine-only reporters. */
   _report: (patch: Partial<Pick<PlayerState, "currentTime" | "duration" | "buffering" | "error" | "playing">>) => void;
+}
+
+interface ClosedSnapshot {
+  queue: QueueItem[];
+  index: number;
+  unshuffled: string[] | null;
+  source: PlaySource | null;
+  currentTime: number;
+  playing: boolean;
 }
 
 let uidCounter = 0;
@@ -137,6 +154,8 @@ export const usePlayer = create<PlayerState>()(
       source: null,
       panel: "none",
       seekRequest: null,
+      closed: null,
+      resumeAt: null,
 
       playItems: (items, startIndex = 0, source, opts) => {
         const playable = items.filter((i) => i.Id && (i.Type === "Audio" || i.MediaType === "Audio"));
@@ -152,7 +171,7 @@ export const usePlayer = create<PlayerState>()(
           queue = [first, ...shuffled(queue.filter((q) => q.uid !== first.uid))];
           index = 0;
         }
-        set({ queue, index, unshuffled, shuffle: doShuffle, playing: true, currentTime: 0, duration: 0, error: null, source: source ?? null });
+        set({ queue, index, unshuffled, shuffle: doShuffle, playing: true, currentTime: 0, duration: 0, error: null, source: source ?? null, closed: null, resumeAt: null });
       },
 
       playNext: (items) => {
@@ -219,6 +238,18 @@ export const usePlayer = create<PlayerState>()(
       setPlaying: (playing) => set({ playing }),
       pause: () => set({ playing: false }),
       stop: () => get().clearQueue(),
+      close: () => {
+        const { queue, index, unshuffled, source, currentTime, playing } = get();
+        if (queue.length === 0) return;
+        get().clearQueue();
+        set({ closed: { queue, index, unshuffled, source, currentTime, playing } });
+      },
+      undoClose: () => {
+        const c = get().closed;
+        if (!c) return;
+        set({ queue: c.queue, index: c.index, unshuffled: c.unshuffled, source: c.source, currentTime: c.currentTime, resumeAt: c.currentTime, playing: c.playing, error: null, closed: null });
+      },
+      dismissClosed: () => set({ closed: null }),
       seek: (time) => set({ seekRequest: { time: Math.max(0, time), nonce: Date.now() }, currentTime: Math.max(0, time) }),
       setVolume: (volume) => set({ volume: Math.min(1, Math.max(0, volume)), muted: false }),
       toggleMute: () => set({ muted: !get().muted }),

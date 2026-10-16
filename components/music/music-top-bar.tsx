@@ -2,18 +2,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Clapperboard, Folders, Home, Search, Tv } from "lucide-react";
 import { UserMenu } from "@/components/nav/user-menu";
 import { cn } from "@/components/ui/cn";
 import { FloatingMenu, type MenuAnchor } from "@/components/ui/floating-menu";
-import { JellyGlyph } from "@/components/ui/logo";
+import { SharkGlyph } from "@/components/ui/logo";
 import { addRecentSearch } from "@/lib/recent-searches";
 import { menuItemCls } from "./track-menu";
 
 /**
  * Spotify-style top bar for the music shell (replaces the pill nav on /music):
- * jellyfish menu (back out to Home / Library / Search) · music home + search · account.
+ * shark logo menu (back out to Home / Library / Search) · music home + search · account.
  */
 export function MusicTopBar() {
   const pathname = usePathname();
@@ -23,22 +23,39 @@ export function MusicTopBar() {
   const params = useSearchParams();
   const onSearch = pathname === "/music/search";
   const urlQuery = onSearch ? params.get("q") ?? "" : "";
+  // The input owns the text while typing; the URL (?q=) follows it after a pause.
   const [query, setQuery] = useState(urlQuery);
-  // Follow the URL when it changes underneath us (recent-search click, back/forward, leaving search).
-  const [syncedUrlQuery, setSyncedUrlQuery] = useState(urlQuery);
-  if (urlQuery !== syncedUrlQuery) {
-    setSyncedUrlQuery(urlQuery);
-    setQuery(urlQuery);
+  /** Last ?q= this input wrote. A URL change to anything else came from outside
+   *  (recent-search click, back/forward, leaving search) and replaces the text. */
+  const [written, setWritten] = useState(urlQuery);
+  const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
+  if (urlQuery !== seenUrlQuery) {
+    setSeenUrlQuery(urlQuery);
+    if (urlQuery !== written) {
+      setWritten(urlQuery);
+      setQuery(urlQuery);
+    }
   }
   const onMusicHome = pathname === "/music";
 
-  /** Search-as-you-type: results live at /music/search?q= (the page debounces the fetch). */
+  const writeTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(writeTimer.current), []);
+  const searchUrl = (value: string) => (value.trim() ? `/music/search?q=${encodeURIComponent(value)}` : "/music/search");
+
+  /** Search-as-you-type: results live at /music/search?q=, written ~250ms after the last keystroke. */
   const onType = (value: string) => {
     setQuery(value);
-    const url = value.trim() ? `/music/search?q=${encodeURIComponent(value)}` : "/music/search";
-    setSyncedUrlQuery(value.trim() ? value : "");
-    if (onSearch) window.history.replaceState(null, "", url);
-    else router.push(url);
+    window.clearTimeout(writeTimer.current);
+    const write = () => {
+      setWritten(value.trim() ? value : "");
+      window.history.replaceState(null, "", searchUrl(value));
+    };
+    if (onSearch) writeTimer.current = window.setTimeout(write, 250);
+    else {
+      // First keystroke elsewhere in Music: go to the search page right away.
+      setWritten(value.trim() ? value : "");
+      router.push(searchUrl(value));
+    }
   };
 
   const close = (opts?: { restoreFocus?: boolean }) => {
@@ -49,6 +66,12 @@ export function MusicTopBar() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     addRecentSearch("music", query);
+    // Enter searches now, skipping the typing pause.
+    window.clearTimeout(writeTimer.current);
+    if (onSearch) {
+      setWritten(query.trim() ? query : "");
+      window.history.replaceState(null, "", searchUrl(query));
+    }
     if (!onSearch) router.push(`/music/search${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ""}`);
   };
 
@@ -75,7 +98,7 @@ export function MusicTopBar() {
         }}
         className="flex size-11 shrink-0 items-center justify-center rounded-full text-accent transition hover:bg-overlay"
       >
-        <JellyGlyph className="size-7" />
+        <SharkGlyph className="size-7" />
       </button>
       {anchor && (
         <FloatingMenu anchor={anchor} onClose={close} label="Go to" triggerRef={logoRef} className="w-56">

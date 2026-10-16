@@ -11,8 +11,8 @@ import {
   MusicRowSkeleton,
   RecentlyAddedRow,
   RowSkeleton,
-  TopRow,
-  TopRowSkeleton,
+  PopularRow,
+  PopularRowSkeleton,
 } from "./home-rows";
 
 const MAX_SLIDES = 5;
@@ -76,7 +76,7 @@ export function HomeView() {
       )}
       <div className="relative z-10 flex flex-col gap-10 pb-20 sm:gap-12">
         <ContinueWatchingRow />
-        <TopRow />
+        <PopularRow />
         <RecentlyAddedRow />
         {/* The "More Like" fallback needs the hero's first title; hold its slot meanwhile. */}
         {heroPending ? <RowSkeleton shape="poster" /> : <BecauseYouWatchedRow fallback={seedFrom(featured)} />}
@@ -101,7 +101,7 @@ function SkeletonRows() {
   return (
     <>
       <RowSkeleton shape="landscape" count={5} />
-      <TopRowSkeleton />
+      <PopularRowSkeleton />
       <RowSkeleton shape="poster" />
       <RowSkeleton shape="poster" />
       <MusicRowSkeleton />

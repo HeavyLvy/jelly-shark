@@ -7,7 +7,7 @@ import { ArrowLeft, KeyRound, Plus, Smartphone } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
-import { JellyGlyph } from "@/components/ui/logo";
+import { SharkGlyph } from "@/components/ui/logo";
 import { ErrorState, Skeleton, Spinner } from "@/components/ui/states";
 import { ApiError, hardNavigate } from "@/lib/api-client";
 import {
@@ -105,7 +105,7 @@ export function LoginView() {
         </Link>
       )}
       <header className="mb-8 flex flex-col items-center gap-3 text-center">
-        <JellyGlyph className="size-10 text-accent" />
+        <SharkGlyph className="size-10 text-accent" />
         <h1 className="font-display text-3xl font-extrabold tracking-display sm:text-4xl">
           {effectiveStep.kind === "choose" ? "Who's watching?" : "Sign in"}
         </h1>

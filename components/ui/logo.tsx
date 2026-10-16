@@ -1,15 +1,16 @@
 import { cn } from "./cn";
 
-/** Jellyfish glyph from the mockups (bell + tentacles), drawn in currentColor. */
-export function JellyGlyph({ className }: { className?: string }) {
+/** Jelly Shark mark: a dorsal fin cutting through a wave, drawn in currentColor. Same shape as app/icon.svg. */
+export function SharkGlyph({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={cn("size-6", className)} aria-hidden="true">
-      <path d="M3.5 12.5a8.5 8.5 0 0 1 17 0Z" fill="currentColor" />
+      <path d="M4.5 16C6 10.5 9.6 5 15.6 3c-1.5 3.8-1.3 8.6.6 13Z" fill="currentColor" />
       <path
-        d="M6 15.5v4.5M10 15.5l-.6 5.5M14 15.5l.6 5.5M18 15.5V20"
+        d="M2 19.5c1.7 0 2-1.6 3.4-1.6s1.7 1.6 3.3 1.6 1.8-1.6 3.3-1.6 1.7 1.6 3.3 1.6 1.8-1.6 3.3-1.6 1.7 1.6 3.4 1.6"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="2.2"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

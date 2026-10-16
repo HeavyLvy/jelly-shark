@@ -98,8 +98,18 @@ function Player({ item }: { item: BaseItemDto }) {
   const [choice, setChoice] = useState<TrackChoice>(() => chooseTracks(item, readVideoPrefs()));
   /** The choice the current stream was negotiated with. Text-subtitle switches only change `choice`. */
   const [negotiated, setNegotiated] = useState<TrackChoice>(choice);
-  const [volumeToast, setVolumeToast] = useState<number | null>(null);
-  const volumeToastTimer = useRef<number | undefined>(undefined);
+  /** Brief on-screen message for keyboard actions (volume, subtitles). */
+  const [osd, setOsd] = useState<{ icon: "volume" | "mute" | "subs"; text: string } | null>(null);
+  const osdTimer = useRef<number | undefined>(undefined);
+  const flashOsd = useCallback((next: { icon: "volume" | "mute" | "subs"; text: string }) => {
+    setOsd(next);
+    window.clearTimeout(osdTimer.current);
+    osdTimer.current = window.setTimeout(() => setOsd(null), 1200);
+  }, []);
+  /** Last subtitle index turned on in this video (what "c" restores). */
+  const lastSubRef = useRef<number | null>(null);
+  const toggleSubsRef = useRef<() => void>(() => {});
+  const trackElRef = useRef<HTMLTrackElement>(null);
   const [maxBitrate, setMaxBitrate] = useState<number | null>(() => readVideoPrefs().maxBitrate);
   const [attempt, setAttempt] = useState(0);
   const [source, setSource] = useState<VideoSource | null>(null);
@@ -120,6 +130,8 @@ function Player({ item }: { item: BaseItemDto }) {
   /** Subtitle track src that has finished loading (Jellyfin may extract it from the file first). */
   const [loadedTrack, setLoadedTrack] = useState<string | null>(null);
   const [trackError, setTrackError] = useState<string | null>(null);
+  /** Subtitle still loading after 10s (Jellyfin extracting it from the file). */
+  const [slowTrack, setSlowTrack] = useState<string | null>(null);
 
   const itemId = item.Id ?? "";
   const isEpisode = item.Type === "Episode";
@@ -362,9 +374,10 @@ function Player({ item }: { item: BaseItemDto }) {
         const cur = videoRef.current?.muted ? 0 : prefs.volume;
         const vol = Math.round(Math.min(1, Math.max(0, cur + (k === "arrowup" ? 0.05 : -0.05))) * 100) / 100;
         updatePrefs({ volume: vol, muted: false });
-        setVolumeToast(vol);
-        window.clearTimeout(volumeToastTimer.current);
-        volumeToastTimer.current = window.setTimeout(() => setVolumeToast(null), 1200);
+        flashOsd({ icon: vol === 0 ? "mute" : "volume", text: `Volume ${Math.round(vol * 100)}%` });
+      } else if (k === "c") {
+        e.preventDefault();
+        toggleSubsRef.current();
       } else if (k === "m") {
         e.preventDefault();
         updatePrefs({ muted: !(videoRef.current?.muted ?? false) });
@@ -375,7 +388,7 @@ function Player({ item }: { item: BaseItemDto }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, seekBy, toggleFullscreen, poke, menu, prefs.volume]);
+  }, [togglePlay, seekBy, toggleFullscreen, poke, menu, prefs.volume, flashOsd]);
 
   useEffect(() => {
     const onFs = () => setFullscreen(!!document.fullscreenElement);
@@ -406,7 +419,8 @@ function Player({ item }: { item: BaseItemDto }) {
     const streams = [...audioStreams(item), ...subtitleStreams(item)];
     if (patch.audioIndex !== undefined) writeVideoPrefs({ audioLang: streams.find((s) => s.Index === patch.audioIndex)?.Language ?? null });
     if (patch.subtitleIndex !== undefined) {
-      writeVideoPrefs({ subtitleLang: patch.subtitleIndex < 0 ? "off" : streams.find((s) => s.Index === patch.subtitleIndex)?.Language ?? "off" });
+      const lang = patch.subtitleIndex < 0 ? "off" : streams.find((s) => s.Index === patch.subtitleIndex)?.Language ?? "off";
+      writeVideoPrefs(lang === "off" ? { subtitleLang: "off" } : { subtitleLang: lang, lastSubtitleLang: lang });
     }
     // Text subtitles switch locally; everything else (audio, image subs) renegotiates at the current position.
     const curSub = subtitleStreams(item).find((s) => s.Index === choice.subtitleIndex);
@@ -429,6 +443,50 @@ function Player({ item }: { item: BaseItemDto }) {
     setChoice(nextChoice);
     setNegotiated(nextChoice);
   };
+
+  // "c": subtitles off ↔ on. On = the last subtitle used in this video, else the
+  // last language used anywhere, else the first subtitle in the list.
+  const toggleSubtitles = () => {
+    const subs = subtitleStreams(item);
+    if (subs.length === 0) return flashOsd({ icon: "subs", text: "No subtitles" });
+    if (choice.subtitleIndex >= 0) {
+      lastSubRef.current = choice.subtitleIndex;
+      changeTracks({ subtitleIndex: -1 });
+      return flashOsd({ icon: "subs", text: "Subtitles off" });
+    }
+    const lang = readVideoPrefs().lastSubtitleLang;
+    const byLang = lang ? subs.filter((s) => s.Language?.toLowerCase() === lang.toLowerCase()) : [];
+    const pick =
+      subs.find((s) => s.Index === lastSubRef.current) ?? byLang.find((s) => s.IsTextSubtitleStream) ?? byLang[0] ?? subs[0];
+    changeTracks({ subtitleIndex: pick.Index ?? -1 });
+    flashOsd({ icon: "subs", text: `Subtitles: ${streamLabel(pick)}` });
+  };
+  useEffect(() => {
+    toggleSubsRef.current = toggleSubtitles;
+  });
+
+  // React doesn't wire onLoad/onError for <track>, so listen natively. A cached
+  // track can finish before we attach, hence the readyState check.
+  const trackSrc = source?.textTrack?.src;
+  useEffect(() => {
+    const el = trackElRef.current;
+    if (!el || !trackSrc) return;
+    const loaded = () => {
+      el.track.mode = "showing";
+      setLoadedTrack(el.src);
+    };
+    const failed = () => setTrackError(el.src);
+    if (el.readyState === HTMLTrackElement.LOADED) loaded();
+    else if (el.readyState === HTMLTrackElement.ERROR) failed();
+    el.addEventListener("load", loaded);
+    el.addEventListener("error", failed);
+    const slow = window.setTimeout(() => setSlowTrack(el.src), 10_000);
+    return () => {
+      window.clearTimeout(slow);
+      el.removeEventListener("load", loaded);
+      el.removeEventListener("error", failed);
+    };
+  }, [trackSrc]);
 
   const changeQuality = (value: number | null) => {
     positionRef.current = videoRef.current?.currentTime ?? positionRef.current;
@@ -508,11 +566,7 @@ function Player({ item }: { item: BaseItemDto }) {
             srcLang={source.textTrack.lang}
             label={source.textTrack.label}
             default
-            onLoad={(e) => {
-              e.currentTarget.track.mode = "showing";
-              setLoadedTrack(e.currentTarget.src);
-            }}
-            onError={(e) => setTrackError(e.currentTarget.src)}
+            ref={trackElRef}
           />
         )}
       </video>
@@ -524,7 +578,7 @@ function Player({ item }: { item: BaseItemDto }) {
         </div>
       )}
       {needsTap && !error && (
-        <button type="button" onClick={togglePlay} aria-label="Play" className="jelly-control absolute top-1/2 left-1/2 flex size-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-text">
+        <button type="button" onClick={togglePlay} aria-label="Play" className="jelly-control jelly-backdrop absolute top-1/2 left-1/2 flex size-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-text">
           <Play className="size-9 translate-x-0.5 fill-current" aria-hidden="true" />
         </button>
       )}
@@ -544,7 +598,7 @@ function Player({ item }: { item: BaseItemDto }) {
           controlsShown ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
-        <button type="button" onClick={back} aria-label="Back" className="jelly-control flex size-11 shrink-0 items-center justify-center rounded-full text-text">
+        <button type="button" onClick={back} aria-label="Back" className="jelly-control jelly-backdrop flex size-11 shrink-0 items-center justify-center rounded-full text-text">
           <ArrowLeft className="size-5" aria-hidden="true" />
         </button>
         <div className="min-w-0">
@@ -553,10 +607,10 @@ function Player({ item }: { item: BaseItemDto }) {
         </div>
       </div>
 
-      {/* Volume change (↑ / ↓) */}
-      {volumeToast !== null && (
+      {/* Keyboard feedback (↑ / ↓ volume, c subtitles) */}
+      {osd && (
         <div className="jelly-panel pointer-events-none absolute top-24 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold tabular-nums" role="status">
-          {volumeToast === 0 ? <VolumeX className="size-4" aria-hidden="true" /> : <Volume2 className="size-4" aria-hidden="true" />} Volume {Math.round(volumeToast * 100)}%
+          {osd.icon === "mute" ? <VolumeX className="size-4" aria-hidden="true" /> : osd.icon === "volume" ? <Volume2 className="size-4" aria-hidden="true" /> : <Subtitles className="size-4" aria-hidden="true" />} {osd.text}
         </div>
       )}
 
@@ -567,7 +621,10 @@ function Player({ item }: { item: BaseItemDto }) {
             "Couldn't load subtitles"
           ) : (
             <>
-              <Spinner className="size-4" label="Loading subtitles" /> Loading subtitles…
+              <Spinner className="size-4" label="Loading subtitles" />
+              {slowTrack === new URL(source.textTrack.src, window.location.origin).href
+                ? "Jellyfin is extracting these subtitles from the file. The first time can take a few minutes."
+                : "Loading subtitles…"}
             </>
           )}
         </div>
@@ -595,7 +652,7 @@ function Player({ item }: { item: BaseItemDto }) {
         <button
           type="button"
           onClick={() => seekTo((activeSkip.EndTicks ?? 0) / TICKS_PER_SECOND)}
-          className="jelly-control absolute right-6 bottom-32 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-text sm:right-10"
+          className="jelly-control jelly-backdrop absolute right-6 bottom-32 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-text sm:right-10"
         >
           {SKIP_LABEL[String(activeSkip.Type)] ?? "Skip"} <SkipForward className="size-4" aria-hidden="true" />
         </button>
@@ -645,6 +702,14 @@ function Player({ item }: { item: BaseItemDto }) {
               aria-label="Volume"
               aria-valuetext={`${Math.round((prefs.muted ? 0 : prefs.volume) * 100)}%`}
               onChange={(e) => updatePrefs({ volume: Number(e.target.value), muted: false })}
+              onKeyDown={(e) => {
+                // step="any" would make arrows jump by 1 (0 ↔ 100%); step 5% like ↑/↓ elsewhere.
+                const dir = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+                if (!dir) return;
+                e.preventDefault();
+                const cur = prefs.muted ? 0 : prefs.volume;
+                updatePrefs({ volume: Math.round(Math.min(1, Math.max(0, cur + dir * 0.05)) * 100) / 100, muted: false });
+              }}
               style={{ "--pct": `${(prefs.muted ? 0 : prefs.volume) * 100}%` } as CSSProperties}
               className="jelly-range hidden h-4 w-24 cursor-pointer appearance-none bg-transparent sm:block"
             />
@@ -751,7 +816,15 @@ function SeekBar({ time, duration, pct, bufPct, onSeek }: { time: number; durati
           onSeek(Number((e.target as HTMLInputElement).value));
           setDrag(null);
         }}
+        onKeyDown={(e) => {
+          // step="any" would step 1s; match the ←/→ shortcut (10s).
+          const dir = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+          if (!dir) return;
+          e.preventDefault();
+          onSeek(Math.min(Math.max(0, time + dir * 10), duration || 0));
+        }}
         onKeyUp={(e) => {
+          if (e.key.startsWith("Arrow")) return;
           onSeek(Number((e.target as HTMLInputElement).value));
           setDrag(null);
         }}

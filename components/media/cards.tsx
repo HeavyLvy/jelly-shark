@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/states";
 import { dotJoin, episodeCode, formatTimeLeft, playedPercent, typeLabel } from "@/lib/format";
 import { pickImage } from "@/lib/jellyfin/images";
 import { detailHref, watchHref } from "@/lib/routes";
-import { POSTER_SIZES, POSTER_WIDTH } from "@/lib/ui-config";
+import { POSTER_SIZES } from "@/lib/ui-config";
 import { ArtFallback, NewBadge, ProgressBar, WatchedBadge } from "./bits";
 import { JfImage } from "./jf-image";
 
@@ -107,24 +107,6 @@ export function LandscapeCard({ item, sizes = "312px", className }: { item: Base
   );
 }
 
-/** "Most watched" card: big outlined rank numeral overlapped by a poster. */
-export function RankCard({ item, rank }: { item: BaseItemDto; rank: number }) {
-  const name = item.Name ?? "Untitled";
-  return (
-    <Link href={detailHref(item)} className="group relative flex shrink-0 items-end rounded-card outline-offset-4" aria-label={`${rank}. ${name}`}>
-      <span
-        aria-hidden="true"
-        className="-mr-[calc(var(--spacing-poster)*0.11)] font-display text-[calc(var(--spacing-poster)*0.79)] leading-[0.8] font-extrabold tracking-[-0.08em] text-transparent select-none [-webkit-text-stroke:3px_var(--color-hairline-strong)]"
-      >
-        {rank}
-      </span>
-      <div className="relative aspect-[2/3] w-[calc(var(--spacing-poster)*0.625)] overflow-hidden rounded-card bg-surface ring-1 ring-hairline transition group-hover:ring-hairline-strong">
-        <JfImage image={pickImage(item, "poster")} alt="" sizes={`${Math.round(POSTER_WIDTH * 0.625)}px`} className="absolute inset-0" fallback={<ArtFallback title={name} className="p-2 [&>span]:text-sm" />} />
-      </div>
-    </Link>
-  );
-}
-
 /** Square album card (music rows). */
 export function AlbumCard({ item, subtitle, className, onContextMenu }: { item: BaseItemDto; subtitle?: ReactNode; className?: string; onContextMenu?: MouseEventHandler }) {
   const name = item.Name ?? "Untitled";
@@ -157,15 +139,6 @@ export function LandscapeCardSkeleton() {
       <Skeleton className="aspect-video w-full" />
       <Skeleton className="mt-2 h-3.5 w-2/3" />
       <Skeleton className="mt-1.5 h-3 w-1/3" />
-    </div>
-  );
-}
-
-export function RankCardSkeleton() {
-  return (
-    <div className="flex shrink-0 items-end" aria-hidden="true">
-      <Skeleton className="-mr-[calc(var(--spacing-poster)*0.11)] h-[calc(var(--spacing-poster)*0.63)] w-[calc(var(--spacing-poster)*0.37)] opacity-40" />
-      <Skeleton className="relative aspect-[2/3] w-[calc(var(--spacing-poster)*0.625)]" />
     </div>
   );
 }

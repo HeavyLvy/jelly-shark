@@ -11,6 +11,8 @@ export interface VideoPrefs {
   audioLang: string | null;
   /** ISO language of the last subtitle picked; "off" = subtitles disabled. */
   subtitleLang: string | "off";
+  /** Last subtitle language actually turned on (kept when subtitles go off; "c" restores it). */
+  lastSubtitleLang: string | null;
   /** Max bitrate in bits/s; null = auto. */
   maxBitrate: number | null;
   volume: number;
@@ -18,7 +20,7 @@ export interface VideoPrefs {
 }
 
 const KEY = "jelly-shark-video-prefs";
-const DEFAULTS: VideoPrefs = { audioLang: null, subtitleLang: "off", maxBitrate: null, volume: 0.9, muted: false };
+const DEFAULTS: VideoPrefs = { audioLang: null, subtitleLang: "off", lastSubtitleLang: null, maxBitrate: null, volume: 0.9, muted: false };
 
 export function readVideoPrefs(): VideoPrefs {
   try {
@@ -28,6 +30,7 @@ export function readVideoPrefs(): VideoPrefs {
     return {
       audioLang: typeof p.audioLang === "string" ? p.audioLang : null,
       subtitleLang: typeof p.subtitleLang === "string" ? p.subtitleLang : "off",
+      lastSubtitleLang: typeof p.lastSubtitleLang === "string" ? p.lastSubtitleLang : null,
       maxBitrate: typeof p.maxBitrate === "number" ? p.maxBitrate : null,
       volume: typeof p.volume === "number" ? Math.min(1, Math.max(0, p.volume)) : DEFAULTS.volume,
       muted: p.muted === true,
