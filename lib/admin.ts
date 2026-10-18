@@ -2,6 +2,7 @@ import "server-only";
 import { getUserApi } from "@jellyfin/sdk/lib/utils/api/user-api";
 import { jsonError } from "@/lib/http";
 import { serverApi } from "@/lib/jellyfin/server";
+import { accountServerUrl, getServerConfig } from "@/lib/server-url";
 import { activeAccount, readSession } from "@/lib/session";
 
 /**
@@ -13,8 +14,11 @@ export async function requireAdmin(): Promise<Response | null> {
   const session = await readSession();
   const account = session ? activeAccount(session) : undefined;
   if (!account) return jsonError(401, "unauthenticated");
+  // Being an admin on some other Jellyfin server says nothing about this instance.
+  const serverUrl = accountServerUrl(account);
+  if (serverUrl !== getServerConfig().defaultUrl) return jsonError(403, "admin_only");
   try {
-    const { data: user } = await getUserApi(await serverApi({ token: account.token, deviceId: account.deviceId })).getCurrentUser();
+    const { data: user } = await getUserApi(await serverApi({ serverUrl, token: account.token, deviceId: account.deviceId })).getCurrentUser();
     if (!user.Policy?.IsAdministrator) return jsonError(403, "admin_only");
     return null;
   } catch {

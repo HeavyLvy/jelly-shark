@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticationApi } from "@jellyfin/sdk/lib/utils/api/authentication-api";
 import { isSameOrigin, jsonError, readJsonBody } from "@/lib/http";
 import { serverApi, upstreamStatus } from "@/lib/jellyfin/server";
+import { accountServerUrl } from "@/lib/server-url";
 import { rateLimited } from "@/lib/rate-limit";
 import { activeAccount, readSession } from "@/lib/session";
 
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   if (rateLimited(`qc:${account.userId}`, 10, 60_000)) return jsonError(429, "too_many_attempts", { message: "Too many tries. Wait a minute and try again." });
 
   try {
-    const { data: ok } = await getAuthenticationApi(await serverApi({ token: account.token, deviceId: account.deviceId })).authorizeQuickConnect({ code });
+    const { data: ok } = await getAuthenticationApi(await serverApi({ serverUrl: accountServerUrl(account), token: account.token, deviceId: account.deviceId })).authorizeQuickConnect({ code });
     if (!ok) return jsonError(404, "invalid_code", { message: "That code isn't valid or has expired." });
     return NextResponse.json({ ok: true, name: account.name }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {

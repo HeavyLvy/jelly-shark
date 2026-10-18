@@ -5,11 +5,15 @@ import { getSystemApi } from "@jellyfin/sdk/lib/utils/api/system-api";
 import { getUserApi } from "@jellyfin/sdk/lib/utils/api/user-api";
 import { jsonError } from "@/lib/http";
 import { serverApi } from "@/lib/jellyfin/server";
+import { getServerConfig, loginServerUrl } from "@/lib/server-url";
 import { readSession, toPublicAccount } from "@/lib/session";
 
 /** Unauthenticated info for the login page: server name, public users, Quick Connect, remembered accounts. */
 export async function GET() {
-  const api = await serverApi();
+  const cfg = getServerConfig();
+  const serverUrl = await loginServerUrl();
+  const api = await serverApi({ serverUrl });
+  const canChangeServer = cfg.policy === "users";
   try {
     const [info, publicUsers, quickConnect, session] = await Promise.all([
       getSystemApi(api).getPublicSystemInfo().then((r) => r.data),
@@ -36,6 +40,10 @@ export async function GET() {
             primaryImageTag: u.PrimaryImageTag ?? null,
             hasPassword: u.HasPassword ?? true,
           })),
+        // Only when people may pick their own server do they get to see or change the address.
+        canChangeServer,
+        serverUrl: canChangeServer ? serverUrl : null,
+        usingDefault: serverUrl === cfg.defaultUrl,
         accounts: session?.accounts.map(toPublicAccount) ?? [],
         activeUserId: session?.activeUserId ?? null,
       },

@@ -11,15 +11,15 @@ export async function POST(req: Request) {
 
   const pending = await readQuickConnect();
   if (!pending) return NextResponse.json({ status: "expired" });
-  const { secret, deviceId } = pending;
+  const { secret, deviceId, serverUrl } = pending;
 
-  const auth = getAuthenticationApi(await serverApi({ deviceId }));
+  const auth = getAuthenticationApi(await serverApi({ serverUrl, deviceId }));
   try {
     const { data: state } = await auth.getQuickConnectState({ secret });
     if (!state.Authenticated) return NextResponse.json({ status: "pending" });
 
     const { data } = await auth.authenticateWithQuickConnect({ quickConnectDto: { Secret: secret } });
-    const account = await persistAuthentication(data, deviceId);
+    const account = await persistAuthentication(data, deviceId, serverUrl);
     await writeQuickConnect(null);
     return NextResponse.json({ status: "authenticated", account: toPublicAccount(account) });
   } catch (err) {

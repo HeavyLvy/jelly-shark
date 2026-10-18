@@ -3,6 +3,7 @@ import { getAuthenticationApi } from "@jellyfin/sdk/lib/utils/api/authentication
 import { isSameOrigin, jsonError } from "@/lib/http";
 import { quickConnectDeviceId } from "@/lib/jellyfin/device";
 import { browserDeviceId, serverApi, upstreamStatus } from "@/lib/jellyfin/server";
+import { loginServerUrl } from "@/lib/server-url";
 import { writeQuickConnect } from "@/lib/session";
 
 /**
@@ -15,9 +16,10 @@ export async function POST(req: Request) {
 
   try {
     const deviceId = quickConnectDeviceId(await browserDeviceId());
-    const { data } = await getAuthenticationApi(await serverApi({ deviceId })).initiateQuickConnect();
+    const serverUrl = await loginServerUrl();
+    const { data } = await getAuthenticationApi(await serverApi({ serverUrl, deviceId })).initiateQuickConnect();
     if (!data.Secret || !data.Code) return jsonError(502, "upstream_error");
-    await writeQuickConnect({ secret: data.Secret, deviceId });
+    await writeQuickConnect({ secret: data.Secret, deviceId, serverUrl });
     return NextResponse.json({ code: data.Code });
   } catch (err) {
     const status = upstreamStatus(err);

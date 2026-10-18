@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { JF_PROXY_PREFIX, SESSION_COOKIE } from "@/lib/constants";
-import { jellyfinUrl } from "@/lib/env";
+import { accountServerUrl } from "@/lib/server-url";
 import { isSameOrigin, jsonError } from "@/lib/http";
 import { buildAuthHeader, deviceNameFromUserAgent } from "@/lib/jellyfin/auth-header";
 import {
@@ -200,7 +200,7 @@ async function handle(req: NextRequest): Promise<Response> {
   if (decodedPath === null) return jsonError(400, "bad_path");
   if (isBlocked(decodedPath.toLowerCase())) return jsonError(403, "blocked_path");
 
-  const base = jellyfinUrl();
+  const base = accountServerUrl(account);
   const upstreamUrl = `${base}${path}${buildQuery(req.nextUrl.search, decodedPath, deviceId, account.userId)}`;
   const baseUrl = new URL(base);
   if (new URL(upstreamUrl).origin !== baseUrl.origin) return jsonError(400, "bad_path");

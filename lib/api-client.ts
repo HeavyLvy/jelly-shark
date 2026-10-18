@@ -14,7 +14,7 @@ export class ApiError extends Error {
 }
 
 interface ApiFetchInit {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   json?: unknown;
   signal?: AbortSignal;
 }

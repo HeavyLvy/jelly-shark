@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { jellyfinUrl } from "@/lib/env";
+import { loginServerUrl } from "@/lib/server-url";
 import { jsonError } from "@/lib/http";
 
 const GUID_RE = /^[0-9a-f]{32}$|^[0-9a-f-]{36}$/i;
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (tag) qs.set("tag", tag);
 
   try {
-    const upstream = await fetch(`${jellyfinUrl()}/UserImage?${qs}`, {
+    const upstream = await fetch(`${await loginServerUrl()}/UserImage?${qs}`, {
       headers: { "accept-encoding": "identity" },
       redirect: "manual",
       cache: "no-store",

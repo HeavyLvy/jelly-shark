@@ -6,6 +6,8 @@ import {
   DEVICE_COOKIE_MAX_AGE,
   QUICK_CONNECT_COOKIE,
   QUICK_CONNECT_MAX_AGE,
+  SERVER_COOKIE,
+  SERVER_COOKIE_MAX_AGE,
   SESSION_COOKIE,
   SESSION_COOKIE_MAX_AGE,
   isValidDeviceId,
@@ -20,6 +22,12 @@ export interface Account {
   primaryImageTag: string | null;
   /** DeviceId the token is bound to (per account; see lib/jellyfin/device.ts). */
   deviceId: string;
+  /**
+   * The Jellyfin server this account signed in to, when it isn't the instance
+   * default (only possible while the admin lets users choose). Undefined means
+   * "whatever the instance default is".
+   */
+  serverUrl?: string;
 }
 
 /** Contents of the sealed `jf_session` cookie. Never sent to client JS. */
@@ -134,6 +142,8 @@ export interface PendingQuickConnect {
   secret: string;
   /** DeviceId sent with Initiate; the issued token is bound to it. */
   deviceId: string;
+  /** The server Initiate was sent to, so polling goes to the same one. */
+  serverUrl: string;
 }
 
 export async function writeQuickConnect(pending: PendingQuickConnect | null): Promise<void> {
@@ -155,9 +165,37 @@ export async function readQuickConnect(): Promise<PendingQuickConnect | null> {
       password: sessionSecret(),
       ttl: QUICK_CONNECT_MAX_AGE,
     });
-    return typeof data.secret === "string" && typeof data.deviceId === "string"
-      ? { secret: data.secret, deviceId: data.deviceId }
+    return typeof data.secret === "string" && typeof data.deviceId === "string" && typeof data.serverUrl === "string"
+      ? { secret: data.secret, deviceId: data.deviceId, serverUrl: data.serverUrl }
       : null;
+  } catch {
+    return null;
+  }
+}
+
+/* The server address picked on the sign-in screen: sealed, so it can only be one we verified. */
+
+export interface PendingServer {
+  url: string;
+}
+
+export async function writePendingServer(pending: PendingServer | null): Promise<void> {
+  const store = await cookies();
+  if (!pending) {
+    store.delete(SERVER_COOKIE);
+    return;
+  }
+  const sealed = await sealData(pending, { password: sessionSecret(), ttl: SERVER_COOKIE_MAX_AGE });
+  store.set(SERVER_COOKIE, sealed, { ...baseCookie, maxAge: SERVER_COOKIE_MAX_AGE });
+}
+
+export async function readPendingServer(): Promise<PendingServer | null> {
+  const store = await cookies();
+  const sealed = store.get(SERVER_COOKIE)?.value;
+  if (!sealed) return null;
+  try {
+    const data = await unsealData<Partial<PendingServer>>(sealed, { password: sessionSecret(), ttl: SERVER_COOKIE_MAX_AGE });
+    return typeof data.url === "string" ? { url: data.url } : null;
   } catch {
     return null;
   }

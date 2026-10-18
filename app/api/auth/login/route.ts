@@ -4,6 +4,7 @@ import { persistAuthentication } from "@/lib/auth-shared";
 import { isSameOrigin, jsonError, readJsonBody } from "@/lib/http";
 import { passwordLoginDeviceId } from "@/lib/jellyfin/device";
 import { browserDeviceId, serverApi, upstreamStatus } from "@/lib/jellyfin/server";
+import { loginServerUrl } from "@/lib/server-url";
 import { toPublicAccount } from "@/lib/session";
 
 interface LoginBody {
@@ -21,10 +22,11 @@ export async function POST(req: Request) {
 
   try {
     const deviceId = passwordLoginDeviceId(await browserDeviceId(), username);
-    const { data } = await getAuthenticationApi(await serverApi({ deviceId })).authenticateUserByName({
+    const serverUrl = await loginServerUrl();
+    const { data } = await getAuthenticationApi(await serverApi({ serverUrl, deviceId })).authenticateUserByName({
       authenticateUserByName: { Username: username, Pw: password },
     });
-    const account = await persistAuthentication(data, deviceId);
+    const account = await persistAuthentication(data, deviceId, serverUrl);
     return NextResponse.json({ account: toPublicAccount(account) });
   } catch (err) {
     const status = upstreamStatus(err);

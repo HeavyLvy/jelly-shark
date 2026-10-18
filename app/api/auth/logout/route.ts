@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionApi } from "@jellyfin/sdk/lib/utils/api/session-api";
 import { isSameOrigin, jsonError, readJsonBody } from "@/lib/http";
+import { accountServerUrl } from "@/lib/server-url";
 import { serverApi } from "@/lib/jellyfin/server";
 import { activeAccount, readSession, removeAccount, writeSession } from "@/lib/session";
 
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
   if (!target) return jsonError(404, "unknown_account");
 
   try {
-    await getSessionApi(await serverApi({ token: target.token, deviceId: target.deviceId })).reportSessionEnded({
+    await getSessionApi(await serverApi({ serverUrl: accountServerUrl(target), token: target.token, deviceId: target.deviceId })).reportSessionEnded({
       timeout: 5_000,
     });
   } catch {

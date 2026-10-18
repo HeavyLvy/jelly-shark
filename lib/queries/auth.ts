@@ -14,12 +14,18 @@ export interface PublicAccount {
 export interface Me {
   user: { id: string; name: string; primaryImageTag: string | null; isAdministrator: boolean };
   accounts: PublicAccount[];
+  server: { name: string | null; canChange: boolean; isInstanceServer: boolean; url: string | null };
 }
 
 export interface ServerInfo {
   serverName: string;
   version: string | null;
   quickConnect: boolean;
+  /** True when the admin lets people sign in to a server of their own. */
+  canChangeServer: boolean;
+  /** The address being used on the sign-in screen (only shared when canChangeServer). */
+  serverUrl: string | null;
+  usingDefault: boolean;
   publicUsers: (PublicAccount & { hasPassword: boolean })[];
   accounts: PublicAccount[];
   activeUserId: string | null;

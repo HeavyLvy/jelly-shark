@@ -7,6 +7,7 @@ import { ArrowLeft, KeyRound, Plus, Smartphone } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
+import { ServerPicker } from "./server-picker";
 import { BrandIcon } from "@/components/ui/brand-icon";
 import { ErrorState, Skeleton, Spinner } from "@/components/ui/states";
 import { ApiError, hardNavigate } from "@/lib/api-client";
@@ -80,8 +81,22 @@ export function LoginView() {
       <div className="jelly-panel relative w-full max-w-lg rounded-panel p-8">
         <ErrorState
           title="Can't reach Jellyfin"
-          description="Check that JELLYFIN_URL in .env.local points at your server and that it's running."
-          action={<Button onClick={() => server.refetch()}>Retry</Button>}
+          description="Check that the server address is right and that Jellyfin is running."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => server.refetch()}>Retry</Button>
+              {/* If a server picked on this screen is the problem, this gets back to the default. */}
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  await fetch("/api/auth/server/check", { method: "DELETE" });
+                  void server.refetch();
+                }}
+              >
+                Use the default server
+              </Button>
+            </div>
+          }
         />
       </div>
     );
@@ -109,10 +124,7 @@ export function LoginView() {
         <h1 className="font-display text-3xl font-extrabold tracking-display sm:text-4xl">
           {effectiveStep.kind === "choose" ? "Who's watching?" : "Sign in"}
         </h1>
-        <p className="text-sm text-muted">
-          {info.serverName}
-          {info.version ? ` · Jellyfin ${info.version}` : ""}
-        </p>
+        <ServerPicker info={info} onChanged={() => setStep({ kind: "choose" })} />
       </header>
 
       {effectiveStep.kind === "choose" && (

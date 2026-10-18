@@ -16,6 +16,10 @@ Open `http://<this machine>:3100` and sign in with your Jellyfin account (or Qui
 
 - **Settings** (playback, subtitles, poster size, Home rows…) are stored per user in a SQLite database on the
   `jelly-shark-data` volume (`/data/jelly-shark.db`). Back that volume up if you care about them; delete it to reset.
+- **Server address:** `JELLYFIN_URL` is the default. Jellyfin administrators can change it in Settings → Server (it's checked
+  before saving), and choose who may pick a server: **Locked** (the default: everyone uses that address and sees no server
+  options, which suits a family setup) or **Users can choose** (the sign-in screen gets "Change server", and each profile
+  remembers the server it signed in to). Administrators of some *other* Jellyfin server have no admin rights here.
 - **Quick Connect:** signed in on one device, you can sign another device into Jellyfin or Jelly Shark without leaving the app
   (account menu or Settings → Approve a device, then type the 6-digit code the other device shows). It approves as the active
   profile; Quick Connect must be enabled on the Jellyfin server.

@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { QUALITY_OPTIONS, SUBTITLE_SIZES, readVideoPrefs, writeVideoPrefs, type VideoPrefs } from "@/lib/player/video-prefs";
 import { HOME_ROWS, posterWidthFor, setUiPrefs, useUiPrefs, type PosterSize } from "@/lib/ui-prefs";
 import { BrandingSection } from "./branding-section";
+import { ServerSection } from "./server-section";
 import { Button } from "@/components/ui/button";
 import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
 import { useMe } from "@/lib/queries/auth";
@@ -38,7 +39,7 @@ export function SettingsView() {
 
 function SettingsBody() {
   const me = useMe();
-  const isAdmin = !!me.data?.user.isAdministrator;
+  const isAdmin = !!me.data?.user.isAdministrator && (me.data?.server.isInstanceServer ?? true);
   const [prefs, setPrefs] = useState<VideoPrefs>(() => readVideoPrefs());
   const ui = useUiPrefs();
   const update = (patch: Partial<VideoPrefs>) => {
@@ -128,6 +129,8 @@ function SettingsBody() {
           </div>
         </Row>
       </Section>
+
+      <ServerSection />
 
       <Section title="Devices">
         <Row label="Approve a device" hint="Sign another device into Jellyfin or Jelly Shark with Quick Connect, without leaving this page.">

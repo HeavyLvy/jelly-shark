@@ -3,6 +3,8 @@
 export const SESSION_COOKIE = "jf_session";
 export const DEVICE_COOKIE = "jf_device";
 export const QUICK_CONNECT_COOKIE = "jf_qc";
+/** Sealed, verified server address picked on the sign-in screen (when users may choose). */
+export const SERVER_COOKIE = "jf_server";
 
 export const CLIENT_NAME = "Jelly Shark";
 export const CLIENT_VERSION = "0.1.0";
@@ -12,6 +14,7 @@ export const DEVICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 400;
 export const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 90;
 /** Jellyfin drops pending Quick Connect requests after 10 minutes. */
 export const QUICK_CONNECT_MAX_AGE = 60 * 10;
+export const SERVER_COOKIE_MAX_AGE = 60 * 30;
 
 export const JF_PROXY_PREFIX = "/api/jf";
 
