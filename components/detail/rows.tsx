@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { BaseItemDto, BaseItemPerson } from "@jellyfin/sdk/lib/generated-client/models";
 import { UserRound } from "lucide-react";
 import { PosterCard, PosterCardSkeleton } from "@/components/media/cards";
@@ -21,7 +22,7 @@ function personImage(p: BaseItemPerson): ImageRef | null {
   };
 }
 
-/** Circular headshots with name + role. Hidden when there's no cast. */
+/** Circular headshots with name + role, each opening the person's page. Hidden when there's no cast. */
 export function CastRow({ people }: { people: BaseItemPerson[] }) {
   const cast = people.filter((p) => p.Type === "Actor" || p.Type === "GuestStar").slice(0, 24);
   if (cast.length === 0) return null;
@@ -29,8 +30,8 @@ export function CastRow({ people }: { people: BaseItemPerson[] }) {
     <MediaRow title="Cast" gapClassName="gap-5">
       {cast.map((p, i) => (
         <RowItem key={`${p.Id ?? p.Name}-${i}`}>
-          <div className="w-28 text-center">
-            <div className="relative mx-auto size-24 overflow-hidden rounded-full bg-surface ring-1 ring-hairline">
+          <Link href={p.Id ? `/person/${p.Id}` : "#"} className="group block w-28 rounded-card text-center outline-offset-4">
+            <div className="relative mx-auto size-24 overflow-hidden rounded-full bg-surface ring-1 ring-hairline transition group-hover:ring-hairline-strong">
               <JfImage
                 image={personImage(p)}
                 alt=""
@@ -43,9 +44,9 @@ export function CastRow({ people }: { people: BaseItemPerson[] }) {
                 }
               />
             </div>
-            <p className="mt-2.5 line-clamp-2 text-sm leading-snug font-medium text-text">{p.Name}</p>
+            <p className="mt-2.5 line-clamp-2 text-sm leading-snug font-medium text-text group-hover:underline">{p.Name}</p>
             {p.Role && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted">{p.Role}</p>}
-          </div>
+          </Link>
         </RowItem>
       ))}
     </MediaRow>

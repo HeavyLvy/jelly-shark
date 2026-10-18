@@ -64,6 +64,20 @@ export function useLatestVideo() {
   });
 }
 
+/** Your favourited movies and shows, most recently added first. */
+export function useFavoriteVideos() {
+  return useJfQuery({
+    queryKey: jfKeys.home("favorites"),
+    queryFn: async ({ signal }) =>
+      (
+        await getLibraryApi(jf).getItems(
+          { includeItemTypes: ["Movie", "Series"], filters: ["IsFavorite"], recursive: true, sortBy: ["DateCreated"], sortOrder: ["Descending"], limit: 24, fields: HOME_FIELDS, enableTotalRecordCount: false, ...imageOpts },
+          { signal },
+        )
+      ).data.Items ?? [],
+  });
+}
+
 /* ---------- Most Popular (your plays in a period) ---------- */
 
 export type PopularPeriod = "1w" | "2w" | "1m" | "3m" | "6m" | "1y";

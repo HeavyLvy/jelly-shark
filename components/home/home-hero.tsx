@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState, useSyncExternalStore, type FocusEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type FocusEvent } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { Pause, Play } from "lucide-react";
 import { CommunityRating, RatingBadge } from "@/components/media/bits";
@@ -23,8 +23,22 @@ export interface HeroSlide {
 const AUTO_ADVANCE_MS = 8000;
 
 /** Shared hero box: the pill nav floats over the top of it. */
-const heroBox = "relative isolate flex min-h-[540px] flex-col justify-end overflow-hidden sm:min-h-[580px] lg:min-h-[620px]";
-const heroContent = "relative z-10 w-full px-4 pt-28 pb-16 sm:px-8 sm:pb-20 lg:px-11";
+const heroBox = "relative isolate flex min-h-[480px] flex-col justify-end overflow-hidden sm:min-h-[580px] lg:min-h-[620px]";
+const heroContent = "relative z-10 w-full px-4 pt-28 pb-12 sm:px-8 sm:pb-20 lg:px-11";
+
+/** Phones get a calmer hero: no auto-advance (swipe instead), no pause pill. */
+const PHONE_QUERY = "(width < 40rem)";
+function subscribePhone(cb: () => void) {
+  const mq = window.matchMedia(PHONE_QUERY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+function useIsPhone(): boolean {
+  return useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE_QUERY).matches, () => false);
+}
+
+/** Horizontal swipe distance (px) that changes the featured title. */
+const SWIPE_PX = 50;
 
 function subscribeReducedMotion(cb: () => void) {
   const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -44,7 +58,8 @@ function usePrefersReducedMotion(): boolean {
 /**
  * Netflix-style featured carousel. Auto-advances every 8s, pausing while
  * hovered or focused, never under prefers-reduced-motion, and has an explicit
- * pause/play control (WCAG 2.2.2).
+ * pause/play control (WCAG 2.2.2). On phones it never auto-advances (so no
+ * pause control is needed); swipe left/right or tap a dot to change title.
  */
 export function HomeHero({ slides }: { slides: HeroSlide[] }) {
   // `prev` keeps the outgoing backdrop mounted for the cross-fade.
@@ -53,9 +68,12 @@ export function HomeHero({ slides }: { slides: HeroSlide[] }) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const reduced = usePrefersReducedMotion();
+  const phone = useIsPhone();
   const count = slides.length;
   const active = Math.min(index, Math.max(0, count - 1));
-  const autoplay = count > 1 && !reduced && !userPaused;
+  const autoplay = count > 1 && !reduced && !userPaused && !phone;
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const go = (dir: 1 | -1) => setPos((p) => ({ index: (p.index + dir + count) % count, prev: p.index }));
   const running = autoplay && !hovered && !focused;
   const regionId = useId();
 
@@ -76,11 +94,21 @@ export function HomeHero({ slides }: { slides: HeroSlide[] }) {
     <section
       aria-roledescription="carousel"
       aria-label="Featured"
-      className={heroBox}
+      className={cn(heroBox, "touch-pan-y")}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
       onBlur={onBlur}
+      // Swipe to change title; vertical drags still scroll the page (touch-pan-y).
+      onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
+      onTouchEnd={(e) => {
+        const start = touch.current;
+        touch.current = null;
+        if (!start || count < 2) return;
+        const dx = e.changedTouches[0].clientX - start.x;
+        const dy = e.changedTouches[0].clientY - start.y;
+        if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+      }}
     >
       {/* Backdrops cross-fade. Only the active, outgoing and next slides are
           mounted, so the first paint doesn't download every full-width image. */}
@@ -112,8 +140,8 @@ export function HomeHero({ slides }: { slides: HeroSlide[] }) {
       </div>
 
       {count > 1 && (
-        <div className="jelly-flat absolute right-4 bottom-5 z-10 flex items-center gap-1 rounded-full px-1.5 sm:right-8 sm:bottom-[76px] lg:right-11">
-          {!reduced && (
+        <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full px-1.5 sm:right-8 sm:bottom-[76px] sm:left-auto sm:translate-x-0 sm:jelly-flat lg:right-11">
+          {!reduced && !phone && (
             <button
               type="button"
               onClick={() => setUserPaused((p) => !p)}
@@ -136,12 +164,12 @@ export function HomeHero({ slides }: { slides: HeroSlide[] }) {
                   aria-current={current ? "true" : undefined}
                   aria-controls={regionId}
                   onClick={() => setPos({ index: i, prev: i === active ? prev : active })}
-                  className="group flex h-8 min-w-6 items-center justify-center px-2"
+                  className="group flex h-8 min-w-5 items-center justify-center px-1.5 sm:min-w-6 sm:px-2"
                 >
                   <span
                     className={cn(
-                      "block h-2 rounded-full transition-all duration-300",
-                      current ? "w-7 bg-text" : "w-2 bg-text/40 group-hover:bg-text/70",
+                      "block rounded-full transition-all duration-300 max-sm:h-1.5 sm:h-2",
+                      current ? "w-5 bg-text sm:w-7" : "w-1.5 bg-text/40 group-hover:bg-text/70 sm:w-2",
                     )}
                   />
                 </button>
@@ -179,22 +207,22 @@ function SlideContent({ slide }: { slide: HeroSlide }) {
         {isEpisode && <span className="font-medium text-text">{dotJoin(episodeCode(item), item.Name)}</span>}
         {year && <span>{year}</span>}
         {runtime && <span>{runtime}</span>}
-        {endsAt && <span>{endsAt}</span>}
+        {endsAt && <span className="max-sm:hidden">{endsAt}</span>}
         {rating && <CommunityRating value={rating} />}
       </div>
-      {item.Overview && <p className="mt-4 line-clamp-3 max-w-lg text-[15px] leading-relaxed text-text-secondary">{item.Overview}</p>}
-      {/* On phones the buttons drop to md so Play, More info, + and ♥ share one line. */}
-      <div className="mt-6 flex flex-wrap items-center gap-3 max-sm:gap-2.5 max-sm:[&>a]:h-10 max-sm:[&>a]:min-w-0 max-sm:[&>a]:px-4 max-sm:[&>a]:text-sm max-sm:[&>div]:gap-2.5 max-sm:[&>div>div>button]:size-10 max-sm:[&>div>button]:size-10">
+      {/* Phones: no synopsis or genres (tap More info for those). */}
+      {item.Overview && <p className="mt-4 line-clamp-3 max-w-lg text-[15px] leading-relaxed text-text-secondary max-sm:hidden">{item.Overview}</p>}
+      {/* Phones: a wide Play button, then round icon buttons for info, + and ♥, all on one line. */}
+      <div className="mt-6 flex flex-wrap items-center gap-3 max-sm:mt-5 max-sm:flex-nowrap max-sm:gap-2 max-sm:[&>a:first-child]:h-11 max-sm:[&>a:first-child]:min-w-0 max-sm:[&>a:first-child]:flex-1 max-sm:[&_button]:size-11">
         {isSeries ? <SeriesPlay item={item} /> : item.Id && <PlayButton href={watchHref(item.Id)} label={inProgress ? "Resume" : "Play"} />}
-        <MoreInfoButton href={detailHref(item)} />
-        {/* Icon pair wraps as a unit on narrow screens. */}
-        <div className="flex items-center gap-3">
+        <MoreInfoButton href={detailHref(item)} compactOnPhone />
+        <div className="flex items-center gap-3 max-sm:gap-2">
           <AddToListButton item={item} />
           <FavoriteButton item={item} />
         </div>
       </div>
       {genres.length > 0 && (
-        <ul className="mt-5 flex flex-wrap gap-2" aria-label="Genres">
+        <ul className="mt-5 flex flex-wrap gap-2 max-sm:hidden" aria-label="Genres">
           {genres.map((g) => (
             <li key={g}>
               <TagChip>{g}</TagChip>

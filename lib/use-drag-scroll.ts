@@ -17,8 +17,7 @@ const MIN_SPEED = 0.02;
  * - After a drag, the click that follows is swallowed, so releasing over a
  *   card doesn't open it, and native link/image dragging is disabled.
  * - On release the row glides with momentum and stays wherever it stops.
- *   Scroll-snap is switched off for the element from the first drag on;
- *   re-enabling it would yank the row to the nearest card.
+ *   (Rows don't use scroll-snap, which would yank them to the nearest card.)
  */
 export function useDragScroll(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
@@ -40,7 +39,6 @@ export function useDragScroll(ref: RefObject<HTMLElement | null>) {
     };
 
     const endDragStyles = () => {
-      // scroll-snap-type stays "none" (see above).
       el.style.removeProperty("scroll-behavior");
       el.style.removeProperty("cursor");
       el.style.removeProperty("user-select");
@@ -72,8 +70,6 @@ export function useDragScroll(ref: RefObject<HTMLElement | null>) {
         if (Math.abs(dx) < DRAG_THRESHOLD) return;
         dragging = true;
         el.setPointerCapture(e.pointerId);
-        // Snap would fight the drag, and re-snapping afterwards moves the row.
-        el.style.scrollSnapType = "none";
         el.style.scrollBehavior = "auto";
         el.style.cursor = "grabbing";
         el.style.userSelect = "none";
@@ -146,7 +142,6 @@ export function useDragScroll(ref: RefObject<HTMLElement | null>) {
     return () => {
       stopGlide();
       endDragStyles();
-      el.style.removeProperty("scroll-snap-type");
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerup", finish);

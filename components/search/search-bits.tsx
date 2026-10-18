@@ -80,7 +80,7 @@ export function TopResultCard({ item, source, className }: { item: BaseItemDto; 
   })();
 
   return (
-    <div className={cn("jelly-solid flex items-center gap-6 rounded-panel p-6", className)}>
+    <div className={cn("jelly-solid flex min-w-0 items-center gap-4 rounded-panel p-4 sm:gap-6 sm:p-6", className)}>
       <Link href={resultHref(item)} className="shrink-0" aria-label={`Open ${item.Name}`}>
         <JfImage
           image={pickImage(item, square ? "square" : item.Type === "Episode" ? "landscape" : "poster")}
@@ -88,20 +88,20 @@ export function TopResultCard({ item, source, className }: { item: BaseItemDto; 
           sizes="160px"
           className={cn(
             "bg-surface-raised shadow-xl shadow-black/40",
-            round ? "size-36 rounded-full" : square ? "size-36 rounded-card" : item.Type === "Episode" ? "aspect-video w-48 rounded-card" : "aspect-[2/3] w-32 rounded-card",
+            round ? "size-20 rounded-full sm:size-36" : square ? "size-20 rounded-card sm:size-36" : item.Type === "Episode" ? "aspect-video w-28 rounded-card sm:w-48" : "aspect-[2/3] w-20 rounded-card sm:w-32",
           )}
           fallback={<span className="absolute inset-0 flex items-center justify-center font-display text-4xl font-extrabold text-muted">{item.Name?.charAt(0)}</span>}
         />
       </Link>
       <div className="min-w-0">
         <Link href={resultHref(item)} className="block hover:underline">
-          <h3 className="line-clamp-2 font-display text-3xl leading-tight font-extrabold tracking-display break-words sm:text-4xl">{item.Name}</h3>
+          <h3 className="line-clamp-2 font-display text-xl leading-tight font-extrabold tracking-display break-words sm:text-4xl">{item.Name}</h3>
         </Link>
         <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-secondary">
           <span className="rounded-full bg-overlay-strong px-2.5 py-0.5 text-xs font-bold tracking-wide text-text uppercase">{typeBadge(item)}</span>
-          {meta && <span>{meta}</span>}
+          {meta && <span className="max-sm:line-clamp-1 max-sm:text-xs">{meta}</span>}
         </p>
-        {playButton && <div className="mt-4">{playButton}</div>}
+        {playButton && <div className="mt-3 sm:mt-4 max-sm:[&>*]:h-9 max-sm:[&>*]:px-4">{playButton}</div>}
       </div>
     </div>
   );
@@ -109,7 +109,7 @@ export function TopResultCard({ item, source, className }: { item: BaseItemDto; 
 
 export function TopResultSkeleton() {
   return (
-    <div className="jelly-solid flex items-center gap-6 rounded-panel p-6" aria-hidden="true">
+    <div className="jelly-solid flex items-center gap-4 rounded-panel p-4 sm:gap-6 sm:p-6" aria-hidden="true">
       <Skeleton tone="raised" className="aspect-[2/3] w-32" />
       <div className="flex-1 space-y-3">
         <Skeleton tone="raised" className="h-9 w-2/3" />
@@ -220,7 +220,7 @@ export function GenreTiles({
   const tileCls = "relative flex aspect-[16/9] items-start overflow-hidden rounded-panel p-4 text-left font-display text-lg font-bold tracking-tight text-text transition hover:brightness-110 sm:text-xl";
   if (loading) {
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4" aria-hidden="true">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(11rem,calc(50%-0.5rem)),1fr))] gap-4" aria-hidden="true">
         {Array.from({ length: 12 }, (_, i) => (
           <Skeleton key={i} tone="raised" className="aspect-[16/9] rounded-panel" />
         ))}
@@ -228,7 +228,7 @@ export function GenreTiles({
     );
   }
   return (
-    <ul className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4">
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(11rem,calc(50%-0.5rem)),1fr))] gap-4">
       {genres.map((g) => {
         const name = g.Name ?? "Genre";
         const body: ReactNode = (

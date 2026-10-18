@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useRef, useState, type FormEvent } from "react";
 import { Clapperboard, Folders, Home, Search, Tv } from "lucide-react";
 import { UserMenu } from "@/components/nav/user-menu";
 import { cn } from "@/components/ui/cn";
 import { FloatingMenu, type MenuAnchor } from "@/components/ui/floating-menu";
 import { SharkGlyph } from "@/components/ui/logo";
 import { addRecentSearch } from "@/lib/recent-searches";
+import { useUrlSearchQuery } from "@/lib/use-url-search-query";
 import { menuItemCls } from "./track-menu";
 
 /**
@@ -20,43 +21,11 @@ export function MusicTopBar() {
   const router = useRouter();
   const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
   const logoRef = useRef<HTMLButtonElement>(null);
-  const params = useSearchParams();
-  const onSearch = pathname === "/music/search";
-  const urlQuery = onSearch ? params.get("q") ?? "" : "";
-  // The input owns the text while typing; the URL (?q=) follows it after a pause.
-  const [query, setQuery] = useState(urlQuery);
-  /** Last ?q= this input wrote. A URL change to anything else came from outside
-   *  (recent-search click, back/forward, leaving search) and replaces the text. */
-  const [written, setWritten] = useState(urlQuery);
-  const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
-  if (urlQuery !== seenUrlQuery) {
-    setSeenUrlQuery(urlQuery);
-    if (urlQuery !== written) {
-      setWritten(urlQuery);
-      setQuery(urlQuery);
-    }
-  }
+  const { query, setQuery, flush, onPage: onSearch } = useUrlSearchQuery("/music/search");
   const onMusicHome = pathname === "/music";
 
-  const writeTimer = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(writeTimer.current), []);
-  const searchUrl = (value: string) => (value.trim() ? `/music/search?q=${encodeURIComponent(value)}` : "/music/search");
-
-  /** Search-as-you-type: results live at /music/search?q=, written ~250ms after the last keystroke. */
-  const onType = (value: string) => {
-    setQuery(value);
-    window.clearTimeout(writeTimer.current);
-    const write = () => {
-      setWritten(value.trim() ? value : "");
-      window.history.replaceState(null, "", searchUrl(value));
-    };
-    if (onSearch) writeTimer.current = window.setTimeout(write, 250);
-    else {
-      // First keystroke elsewhere in Music: go to the search page right away.
-      setWritten(value.trim() ? value : "");
-      router.push(searchUrl(value));
-    }
-  };
+  /** Search-as-you-type: results live at /music/search?q= (see useUrlSearchQuery). */
+  const onType = (value: string) => setQuery(value);
 
   const close = (opts?: { restoreFocus?: boolean }) => {
     setAnchor(null);
@@ -67,12 +36,7 @@ export function MusicTopBar() {
     e.preventDefault();
     addRecentSearch("music", query);
     // Enter searches now, skipping the typing pause.
-    window.clearTimeout(writeTimer.current);
-    if (onSearch) {
-      setWritten(query.trim() ? query : "");
-      window.history.replaceState(null, "", searchUrl(query));
-    }
-    if (!onSearch) router.push(`/music/search${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ""}`);
+    flush();
   };
 
   const links = [
@@ -125,15 +89,23 @@ export function MusicTopBar() {
           <label htmlFor="music-search" className="sr-only">
             Search music
           </label>
-          <input
-            id="music-search"
-            value={query}
-            onChange={(e) => onType(e.target.value)}
-            onFocus={() => !onSearch && !query && router.push("/music/search")}
-            placeholder="What do you want to play?"
-            autoComplete="off"
-            className="min-w-0 flex-1 bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
-          />
+          <span className="relative flex min-w-0 flex-1 items-center">
+            <input
+              id="music-search"
+              value={query}
+              onChange={(e) => onType(e.target.value)}
+              onFocus={() => !onSearch && !query && router.push("/music/search")}
+              autoComplete="off"
+              className="w-full min-w-0 bg-transparent text-sm text-text focus:outline-none"
+            />
+            {/* Placeholder that fits: short on phones, Spotify's line on wider screens. */}
+            {!query && (
+              <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 flex items-center truncate text-sm text-muted">
+                <span className="sm:hidden">Search</span>
+                <span className="hidden sm:inline">What do you want to play?</span>
+              </span>
+            )}
+          </span>
         </form>
       </div>
 

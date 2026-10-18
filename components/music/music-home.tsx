@@ -9,18 +9,11 @@ import { JfImage } from "@/components/media/jf-image";
 import { MediaRow, RowItem } from "@/components/media/media-row";
 import { Chip } from "@/components/ui/chip";
 import { cn } from "@/components/ui/cn";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { EmptyState, ErrorState, Skeleton, Spinner } from "@/components/ui/states";
 import { pickImage } from "@/lib/jellyfin/images";
 import { useMe } from "@/lib/queries/auth";
-import {
-  LIKED_ID,
-  fetchArtistMix,
-  useMostPlayedTracks,
-  useMusicPlaylists,
-  usePlayedAlbums,
-  useRecentAlbums,
-  useTopArtists,
-} from "@/lib/queries/music";
+import { LIKED_ID, fetchArtistMix, useMostPlayedTracks, useMusicPlaylists, usePlayedAlbums, useRecentAlbums, useTopArtists, useAlbumsSorted, useArtistsSorted, ALBUM_SORTS, ARTIST_SORTS, type AlbumSort, type ArtistSort } from "@/lib/queries/music";
 import { usePlayer } from "@/lib/player/store";
 import { useNow } from "@/lib/use-now";
 import { ArtistCardSkeleton, MusicAlbumCard, MusicArtistCard, useMusicItemMenu } from "./music-cards";
@@ -50,7 +43,7 @@ export function MusicHome() {
       <div ref={sentinel} aria-hidden="true" className="h-px" />
       {/* Spotify-style sticky filter row: transparent at the top, jelly glass once content scrolls under it. */}
       <div className={cn("sticky top-0 z-20 -mt-px px-5 py-3 transition-[background,box-shadow] sm:px-7", stuck ? "jelly rounded-t-panel border-x-0 border-t-0" : "border-b border-transparent")}>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 scrollbar-none [&>*]:shrink-0" role="group" aria-label="Show">
           {(["all", "albums", "artists", "playlists"] as const).map((f) => (
             <Chip key={f} active={filter === f} onClick={() => setFilter(f)} className="h-8 px-4 text-xs capitalize">
               {f}
@@ -97,7 +90,7 @@ function QuickPicks() {
 
   if (playlists.isPending || albums.isPending) {
     return (
-      <div className="mt-5 grid gap-2 sm:grid-cols-2" aria-hidden="true">
+      <div className="mt-5 grid grid-cols-2 gap-2" aria-hidden="true">
         {Array.from({ length: 8 }, (_, i) => (
           <Skeleton key={i} tone="raised" className="h-14" />
         ))}
@@ -105,7 +98,7 @@ function QuickPicks() {
     );
   }
   return (
-    <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+    <ul className="mt-5 grid grid-cols-2 gap-2">
       {tiles.map((t) => {
         const active = source?.href === t.href;
         return (
@@ -119,7 +112,7 @@ function QuickPicks() {
                   <Heart className="size-5 fill-current" aria-hidden="true" />
                 </span>
               )}
-              <span className={cn("min-w-0 flex-1 truncate text-sm font-semibold", active && "text-accent")}>{t.name}</span>
+              <span className={cn("line-clamp-2 min-w-0 flex-1 text-[13px] leading-tight font-semibold break-words sm:line-clamp-1 sm:text-sm", active && "text-accent")}>{t.name}</span>
               {active && <EqualizerIcon playing={playing} />}
             </Link>
             )}
@@ -264,24 +257,36 @@ function TopArtistsRow() {
 const gridCls = "grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-x-4 gap-y-6 px-4 sm:px-7";
 
 function AlbumGrid() {
-  const albums = useRecentAlbums(200);
+  const [sort, setSort] = useState<AlbumSort>("added");
+  const albums = useAlbumsSorted(sort);
   if (albums.isError) return <ErrorState title="Couldn't load albums" />;
   return (
+    <>
+    <div className="mb-4 flex justify-end px-4 sm:px-7">
+      <SelectMenu value={sort} options={ALBUM_SORTS} onChange={setSort} label="Sort albums by" size="sm" />
+    </div>
     <div className={gridCls}>
       {albums.isPending
         ? Array.from({ length: 12 }, (_, i) => <AlbumCardSkeleton key={i} />)
         : albums.data.map((a) => <MusicAlbumCard key={a.Id} item={a} className="w-full" subtitle={[a.AlbumArtist, a.ProductionYear].filter(Boolean).join(" · ")} />)}
     </div>
+    </>
   );
 }
 
 function ArtistGrid() {
-  const artists = useTopArtists(200);
+  const [sort, setSort] = useState<ArtistSort>("played");
+  const artists = useArtistsSorted(sort);
   if (artists.isError) return <ErrorState title="Couldn't load artists" />;
   return (
-    <div className={gridCls}>
-      {artists.isPending ? Array.from({ length: 12 }, (_, i) => <ArtistCardSkeleton key={i} />) : artists.data.map((a) => <MusicArtistCard key={a.Id} item={a} className="w-full" />)}
-    </div>
+    <>
+      <div className="mb-4 flex justify-end px-4 sm:px-7">
+        <SelectMenu value={sort} options={ARTIST_SORTS} onChange={setSort} label="Sort artists by" size="sm" />
+      </div>
+      <div className={gridCls}>
+        {artists.isPending ? Array.from({ length: 12 }, (_, i) => <ArtistCardSkeleton key={i} />) : artists.data.map((a) => <MusicArtistCard key={a.Id} item={a} className="w-full" />)}
+      </div>
+    </>
   );
 }
 

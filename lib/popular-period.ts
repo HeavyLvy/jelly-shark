@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { POPULAR_PERIODS, type PopularPeriod } from "@/lib/queries/home";
+import { onSettingsSynced, persistSetting } from "@/lib/settings-sync";
 
 /** Home "Most Popular" period, remembered per browser. Default: past 2 weeks. */
 const KEY = "jelly-shark-popular-period";
@@ -24,10 +25,17 @@ export function setPopularPeriod(period: PopularPeriod) {
     // storage unavailable: the choice lasts until reload
   }
   current = period;
+  persistSetting("popularPeriod", period);
   listeners.forEach((l) => l());
 }
 
 let current: PopularPeriod | null = null;
+
+// After the server copy is pulled, drop the cached value so it's re-read from localStorage.
+onSettingsSynced(() => {
+  current = null;
+  listeners.forEach((l) => l());
+});
 
 export function usePopularPeriod(): PopularPeriod {
   return useSyncExternalStore(

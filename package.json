@@ -3,17 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3100",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@jellyfin/sdk": "^1.0.0",
     "@tanstack/react-query": "^5.104.2",
     "@tanstack/react-virtual": "^3.14.19",
     "axios": "^1.20.0",
+    "better-sqlite3": "^13.0.3",
     "blurhash": "^2.0.5",
+    "drizzle-orm": "^0.45.4",
     "hls.js": "^1.7.3",
     "iron-session": "^9.0.1",
     "lucide-react": "^1.57.0",
@@ -26,9 +30,11 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^20",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.4.1",
     "tailwindcss": "^4",

@@ -153,7 +153,12 @@ export function LibraryView() {
             isFetchingNextPage={items.isFetchingNextPage}
             isFetchNextPageError={items.isFetchNextPageError}
             fetchNextPage={() => void items.fetchNextPage()}
-            empty={<NoResults filtered={filtered} kindPlural={kind.plural} onClear={clearFilters} />}
+            empty={<NoResults
+                filtered={filtered}
+                kindPlural={kind.plural}
+                onClear={clearFilters}
+                emptyHint={state.kind === "favorites" ? "Right-click a poster (long-press on a phone) or use the ♥ button, and your favourites collect here." : undefined}
+              />}
           />
         </section>
         <AlphaRail

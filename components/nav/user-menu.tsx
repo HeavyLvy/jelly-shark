@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, LogOut, UserPlus } from "lucide-react";
+import { Check, ChevronDown, History, Keyboard, LogOut, Settings, UserPlus } from "lucide-react";
+import { OPEN_SHORTCUTS } from "@/components/shortcuts-dialog";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/components/ui/cn";
 import { ApiError, hardNavigate } from "@/lib/api-client";
@@ -149,6 +151,27 @@ export function UserMenu() {
               <UserPlus className="size-3.5" aria-hidden="true" />
             </span>
             Add profile
+          </button>
+          <div className="my-1.5 h-px bg-hairline" role="separator" />
+          <Link role="menuitem" href="/history" onClick={() => setOpen(false)} className={cn(itemClass, "text-text-secondary hover:text-text")}>
+            <History className="size-4" aria-hidden="true" />
+            Watch history
+          </Link>
+          <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className={cn(itemClass, "text-text-secondary hover:text-text")}>
+            <Settings className="size-4" aria-hidden="true" />
+            Settings
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new Event(OPEN_SHORTCUTS));
+            }}
+            className={cn(itemClass, "text-text-secondary hover:text-text")}
+          >
+            <Keyboard className="size-4" aria-hidden="true" />
+            Shortcuts &amp; gestures
           </button>
           <div className="my-1.5 h-px bg-hairline" role="separator" />
           <button

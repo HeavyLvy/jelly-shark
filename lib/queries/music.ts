@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { BaseItemDto, ItemFields } from "@jellyfin/sdk/lib/generated-client/models";
+import type { BaseItemDto, ItemFields, ItemSortBy, SortOrder } from "@jellyfin/sdk/lib/generated-client/models";
 import { getArtistApi } from "@jellyfin/sdk/lib/utils/api/artist-api";
 import { getInstantMixApi } from "@jellyfin/sdk/lib/utils/api/instant-mix-api";
 import { getLibraryApi } from "@jellyfin/sdk/lib/utils/api/library-api";
@@ -22,6 +22,55 @@ const k = {
 
 async function items(params: Parameters<ReturnType<typeof getLibraryApi>["getItems"]>[0], signal: AbortSignal) {
   return (await getLibraryApi(jf).getItems({ recursive: true, enableTotalRecordCount: false, ...params }, { signal })).data.Items ?? [];
+}
+
+/** "Radio": Jellyfin's instant mix seeded by a song, album, artist or playlist. */
+export async function fetchRadio(item: BaseItemDto, limit = 80): Promise<BaseItemDto[]> {
+  if (!item.Id) return [];
+  const { data } = await getInstantMixApi(jf).getInstantMixFromItem({ itemId: item.Id, limit, fields: TRACK_FIELDS });
+  return data.Items ?? [];
+}
+
+export type AlbumSort = "added" | "name" | "artist" | "year";
+export const ALBUM_SORTS: { value: AlbumSort; label: string }[] = [
+  { value: "added", label: "Recently added" },
+  { value: "name", label: "Name" },
+  { value: "artist", label: "Artist" },
+  { value: "year", label: "Release year" },
+];
+const ALBUM_SORT_BY: Record<AlbumSort, { sortBy: ItemSortBy[]; sortOrder: SortOrder[] }> = {
+  added: { sortBy: ["DateCreated", "SortName"], sortOrder: ["Descending", "Ascending"] },
+  name: { sortBy: ["SortName"], sortOrder: ["Ascending"] },
+  artist: { sortBy: ["AlbumArtist", "ProductionYear", "SortName"], sortOrder: ["Ascending", "Ascending", "Ascending"] },
+  year: { sortBy: ["ProductionYear", "SortName"], sortOrder: ["Descending", "Ascending"] },
+};
+
+/** All albums, sorted for the music "Albums" grid. */
+export function useAlbumsSorted(sort: AlbumSort, limit = 300) {
+  return useJfQuery({
+    queryKey: k.list(`albums-${sort}-${limit}`),
+    queryFn: ({ signal }) => items({ includeItemTypes: ["MusicAlbum"], ...ALBUM_SORT_BY[sort], limit, fields: ALBUM_FIELDS }, signal),
+  });
+}
+
+export type ArtistSort = "played" | "name";
+export const ARTIST_SORTS: { value: ArtistSort; label: string }[] = [
+  { value: "played", label: "Most played" },
+  { value: "name", label: "Name" },
+];
+
+/** All album artists, sorted for the music "Artists" grid. */
+export function useArtistsSorted(sort: ArtistSort, limit = 300) {
+  return useJfQuery({
+    queryKey: k.list(`artists-${sort}-${limit}`),
+    queryFn: async ({ signal }) =>
+      (
+        await getArtistApi(jf).getAlbumArtists(
+          { sortBy: sort === "name" ? ["SortName"] : ["PlayCount", "SortName"], sortOrder: sort === "name" ? ["Ascending"] : ["Descending", "Ascending"], limit, fields: ["ChildCount"], enableTotalRecordCount: false },
+          { signal },
+        )
+      ).data.Items ?? [],
+  });
 }
 
 /* ---------- sidebar / home ---------- */

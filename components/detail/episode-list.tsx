@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMediaMenu } from "@/components/media/media-menu";
 import { useEffect, useRef } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { Play } from "lucide-react";
@@ -70,10 +71,12 @@ function EpisodeRow({ episode, fallbackIndex, wideIndex }: { episode: BaseItemDt
   const watched = !inProgress && !!episode.UserData?.Played;
   const runtime = formatRuntime(episode.RunTimeTicks);
   const status = inProgress ? (left ? `Resume · ${left}` : "Resume") : watched ? "Watched" : null;
+  const { onContextMenu, menu } = useMediaMenu(episode);
 
   return (
     <li
       id={`episode-${id}`}
+      onContextMenu={onContextMenu}
       className={cn(
         "scroll-mt-28 border-b border-hairline",
         inProgress && "my-2 rounded-panel border-transparent bg-surface first:mt-0",
@@ -124,6 +127,7 @@ function EpisodeRow({ episode, fallbackIndex, wideIndex }: { episode: BaseItemDt
           {status && <p className="mt-2 text-[11px] font-bold tracking-wider text-accent uppercase">{status}</p>}
         </div>
       </div>
+      {menu}
     </li>
   );
 }

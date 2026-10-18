@@ -24,8 +24,9 @@ interface MediaRowProps {
 
 /**
  * Horizontal scroll row with a heading, optional "See all", and arrow
- * buttons that page by ~one viewport. Native scroll + snap, so touch and
- * trackpads work; mouse users can also click-and-drag. Arrows disable at the ends.
+ * buttons that page by ~one viewport, landing on a card edge. Native scroll
+ * (no snapping, so the row stays where you leave it), so touch and trackpads
+ * work; mouse users can also click-and-drag. Arrows disable at the ends.
  */
 export function MediaRow({ title, subtitle, label, seeAllHref, action, children, className, gapClassName = "gap-4" }: MediaRowProps) {
   const headingId = useId();
@@ -56,7 +57,14 @@ export function MediaRow({ title, subtitle, label, seeAllHref, action, children,
     const el = scroller.current;
     if (!el) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: reduce ? "auto" : "smooth" });
+    // Page by ~85% of the width, then align to the nearest card's left edge.
+    const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    const rough = el.scrollLeft + dir * el.clientWidth * 0.85;
+    const box = el.getBoundingClientRect();
+    // Each card's scroll position that puts it at the row's left padding.
+    const cardEdges = Array.from(el.children, (c) => c.getBoundingClientRect().left - box.left + el.scrollLeft - pad);
+    const target = cardEdges.reduce((best, x) => (Math.abs(x - rough) < Math.abs(best - rough) ? x : best), cardEdges[0] ?? rough);
+    el.scrollTo({ left: Math.max(0, target), behavior: reduce ? "auto" : "smooth" });
   };
 
   return (
@@ -90,7 +98,7 @@ export function MediaRow({ title, subtitle, label, seeAllHref, action, children,
       <ul
         ref={scroller}
         className={cn(
-          "flex snap-x snap-mandatory scroll-px-4 overflow-x-auto overflow-y-hidden px-4 pb-2 scrollbar-none sm:scroll-px-8 sm:px-8 lg:scroll-px-11 lg:px-11",
+          "flex overflow-x-auto overflow-y-hidden px-4 pb-2 scrollbar-none sm:px-8 lg:px-11",
           gapClassName,
         )}
       >
@@ -100,7 +108,7 @@ export function MediaRow({ title, subtitle, label, seeAllHref, action, children,
   );
 }
 
-/** List item wrapper for MediaRow children (snap alignment). */
+/** List item wrapper for MediaRow children. */
 export function RowItem({ children }: { children: ReactNode }) {
-  return <li className="shrink-0 snap-start">{children}</li>;
+  return <li className="shrink-0">{children}</li>;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { ChevronLeft } from "lucide-react";
 import { CommunityRating, RatingBadge } from "@/components/media/bits";
@@ -38,7 +38,8 @@ interface DetailHeroProps {
   /** Item whose backdrop to show when `item` has none (e.g. a collection's child). */
   backdropItem?: BaseItemDto;
   /** Extra meta entries after the years (runtime, seasons, "Ends at"…). */
-  meta: ReactNode[];
+  /** Facts after the year. `{ node, hideOnPhone }` drops one on phones (e.g. "Ends at"). */
+  meta: (ReactNode | { node: ReactNode; hideOnPhone: true })[];
   actions: ReactNode;
   panel: ReactNode;
 }
@@ -82,7 +83,11 @@ export function DetailHero({ item, backdropItem, meta, actions, panel }: DetailH
               </li>
             )}
             {years && <li>{years}</li>}
-            {meta.map((m, i) => (m ? <li key={i}>{m}</li> : null))}
+            {meta.map((m, i) => {
+              if (!m) return null;
+              if (typeof m === "object" && "hideOnPhone" in m) return m.node ? <li key={i} className="max-sm:hidden">{m.node}</li> : null;
+              return <li key={i}>{m}</li>;
+            })}
             {rating && (
               <li>
                 <CommunityRating value={rating} />
@@ -90,14 +95,28 @@ export function DetailHero({ item, backdropItem, meta, actions, panel }: DetailH
             )}
           </ul>
           {tagline && !item.Overview && <p className="mt-4 text-base text-text-secondary italic">{tagline}</p>}
-          {item.Overview && (
-            <p className="mt-4 line-clamp-4 max-w-[38rem] text-[15px] leading-relaxed text-text-secondary sm:line-clamp-3">{item.Overview}</p>
-          )}
+          {item.Overview && <Synopsis text={item.Overview} />}
           <div className="mt-6 flex flex-wrap items-center gap-2.5 sm:gap-3">{actions}</div>
         </div>
         {panel && <div className="w-full lg:w-[23rem] lg:shrink-0">{panel}</div>}
       </div>
     </section>
+  );
+}
+
+/** Overview clamped to 3 lines; long ones get "More" / "Less" (handy on phones). */
+function Synopsis({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 160;
+  return (
+    <div className="mt-4 max-w-[38rem] text-[15px] leading-relaxed text-text-secondary">
+      <p className={open ? undefined : "line-clamp-3"}>{text}</p>
+      {long && (
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="mt-1 text-sm font-semibold text-text hover:underline">
+          {open ? "Less" : "More"}
+        </button>
+      )}
+    </div>
   );
 }
 

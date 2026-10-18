@@ -1,5 +1,7 @@
 /** Typed fetch helper for our own /api/auth/* routes (browser-side). */
 
+import { clearResume } from "@/lib/player/resume-cookie";
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -43,6 +45,7 @@ export async function apiFetch<T>(url: string, { method = "GET", json, signal }:
  */
 export function hardNavigate(path: string): void {
   // The music queue is persisted in localStorage, which isn't per-user.
+  clearResume();
   try {
     window.localStorage.removeItem("jelly-shark-player");
   } catch {

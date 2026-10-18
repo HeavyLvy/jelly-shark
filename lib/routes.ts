@@ -18,6 +18,8 @@ export function detailHref(item: BaseItemDto): string {
       return `/music/artist/${id}`;
     case "Playlist":
       return `/music/playlist/${id}`;
+    case "Person":
+      return `/person/${id}`;
     default:
       return `/item/${id}`;
   }

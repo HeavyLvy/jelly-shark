@@ -6,6 +6,7 @@ import { getSessionApi } from "@jellyfin/sdk/lib/utils/api/session-api";
 import { jf, jfUrl } from "@/lib/jellyfin/client";
 import { TICKS_PER_SECOND } from "@/lib/format";
 import { negotiateAudio, type AudioSource } from "@/lib/player/negotiate";
+import { clearResume, readResume, saveResume } from "@/lib/player/resume-cookie";
 import { currentTrack, usePlayer, type QueueItem } from "@/lib/player/store";
 
 /**
@@ -26,6 +27,8 @@ import { currentTrack, usePlayer, type QueueItem } from "@/lib/player/store";
  */
 
 const PROGRESS_INTERVAL_MS = 10_000;
+/** How often the resume cookie is refreshed while playing. */
+const RESUME_SAVE_MS = 5_000;
 const PREFETCH_TTL_MS = 5 * 60_000;
 
 const ticks = (seconds: number) => Math.max(0, Math.round(seconds * TICKS_PER_SECOND));
@@ -95,6 +98,15 @@ export function AudioEngine() {
 
     const position = () => (loaded.source?.offset ?? 0) + (el.currentTime || 0);
 
+    /* ---------- resume point (cookie, 1 day) ---------- */
+    let lastResumeSave = 0;
+    const saveResumePoint = () => {
+      if (!loaded.uid || !loaded.source) return;
+      if (currentTrack(store.getState())?.uid !== loaded.uid) return;
+      lastResumeSave = performance.now();
+      saveResume({ uid: loaded.uid, t: position() });
+    };
+
     /* ---------- Media Session ---------- */
     const ms = "mediaSession" in navigator ? navigator.mediaSession : null;
     const setPlaybackState = (state: MediaSessionPlaybackState) => {
@@ -154,6 +166,7 @@ export function AudioEngine() {
       progressTimer = window.setInterval(reportProgress, PROGRESS_INTERVAL_MS);
     };
     const onPageHide = () => {
+      saveResumePoint();
       if (!reported) return;
       const { itemId, source } = reported;
       void fetch("/api/jf/Sessions/Playing/Stopped", {
@@ -245,6 +258,7 @@ export function AudioEngine() {
         reportStop();
         unload();
         updateMetadata(null);
+        clearResume();
         return;
       }
       if (loaded.uid === cur.uid || syncingUid === cur.uid) return;
@@ -253,8 +267,10 @@ export function AudioEngine() {
         reportStop();
         updateMetadata(cur);
         // Undo-close resumes where it left off.
-        const startAt = store.getState().resumeAt ?? 0;
-        if (startAt) store.setState({ resumeAt: null });
+        // Undo-close / a refresh resume where it left off (only for that same entry).
+        const resume = store.getState().resumeAt;
+        const startAt = resume?.uid === cur.uid ? resume.t : 0;
+        if (resume) store.setState({ resumeAt: null });
         const ok = await load(cur, startAt);
         if (!ok || currentTrack(store.getState())?.uid !== cur.uid) return;
         store.getState()._report({ currentTime: startAt, duration: (cur.RunTimeTicks ?? 0) / TICKS_PER_SECOND, error: null });
@@ -270,15 +286,20 @@ export function AudioEngine() {
       if (loaded.uid !== cur.uid) unload();
       updateMetadata(cur);
       setPlaybackState("paused");
-      store.getState()._report({ currentTime: store.getState().resumeAt ?? 0, duration: (cur.RunTimeTicks ?? 0) / TICKS_PER_SECOND, error: null });
+      const resume = store.getState().resumeAt;
+      store.getState()._report({ currentTime: resume?.uid === cur.uid ? resume.t : 0, duration: (cur.RunTimeTicks ?? 0) / TICKS_PER_SECOND, error: null });
     };
 
     /* ---------- element events ---------- */
     const handlers: Record<string, () => void> = {
       timeupdate: () => {
+        // Clearing the element (unload) fires timeupdate at 0 with nothing loaded;
+        // ignore it so a restored/paused position isn't wiped.
+        if (!loaded.source) return;
         const duration = loaded.item?.RunTimeTicks ? loaded.item.RunTimeTicks / TICKS_PER_SECOND : el.duration || 0;
         store.getState()._report({ currentTime: position(), duration });
         updatePosition();
+        if (performance.now() - lastResumeSave > RESUME_SAVE_MS) saveResumePoint();
       },
       playing: () => {
         log("event playing");
@@ -294,6 +315,7 @@ export function AudioEngine() {
         store.getState()._report({ playing: false });
         setPlaybackState("paused");
         reportProgress();
+        saveResumePoint();
       },
       waiting: () => {
         log("event waiting");
@@ -307,6 +329,12 @@ export function AudioEngine() {
       ended: () => {
         log("event ended");
         reportStop();
+        // Sleep timer "end of this song": stop here instead of moving on.
+        if (store.getState().sleepEndOfTrack) {
+          store.setState({ sleepEndOfTrack: false, playing: false });
+          setPlaybackState("paused");
+          return;
+        }
         store.getState().next(true);
       },
       error: () => {
@@ -318,6 +346,15 @@ export function AudioEngine() {
       },
     };
     for (const [ev, fn] of Object.entries(handlers)) el.addEventListener(ev, fn);
+
+    // Sleep timer: pause when the time is up.
+    const sleepTick = window.setInterval(() => {
+      const { sleepAt, playing } = store.getState();
+      if (sleepAt !== null && Date.now() >= sleepAt) {
+        store.setState({ sleepAt: null });
+        if (playing) store.getState().pause();
+      }
+    }, 1000);
 
     const onVisibility = () => log("visibilitychange");
     document.addEventListener("visibilitychange", onVisibility);
@@ -379,6 +416,8 @@ export function AudioEngine() {
 
       if (state.seekRequest && state.seekRequest !== prev.seekRequest && loaded.item) {
         const t = state.seekRequest.time;
+        // Loaded: the seek applies now, so the "start here on first load" note isn't needed.
+        if (state.resumeAt) store.setState({ resumeAt: null });
         if (loaded.source?.canByteSeek) {
           el.currentTime = t;
           if (state.playing && el.paused) play();
@@ -391,10 +430,16 @@ export function AudioEngine() {
       }
     });
 
+    // Back after a refresh (or within a day): same song, same spot, paused.
     const restored = currentTrack(store.getState());
-    if (restored) showPaused(restored);
+    if (restored) {
+      const point = readResume();
+      if (point && point.uid === restored.uid && point.t > 0) store.setState({ resumeAt: point, currentTime: point.t });
+      showPaused(restored);
+    }
 
     return () => {
+      window.clearInterval(sleepTick);
       unsub();
       window.removeEventListener("pagehide", onPageHide);
       document.removeEventListener("visibilitychange", onVisibility);

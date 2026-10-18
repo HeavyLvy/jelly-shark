@@ -17,15 +17,24 @@ import { useJfInfiniteQuery, useJfQuery } from "./use-jf-query";
 
 /* ---------- URL vocabulary (kept in one place so the view and links agree) ---------- */
 
-export type LibraryKind = "movies" | "tv" | "collections";
+export type LibraryKind = "movies" | "tv" | "collections" | "favorites";
 export type LibrarySort = "recent" | "name" | "year" | "rating" | "runtime";
 export type LibraryFilter = "unwatched" | "watched" | "favorites" | "inprogress";
 export type LibraryView = "grid" | "list";
 
-export const LIBRARY_KINDS: { value: LibraryKind; label: string; itemType: BaseItemKind; singular: string; plural: string }[] = [
-  { value: "movies", label: "Movies", itemType: "Movie", singular: "movie", plural: "movies" },
-  { value: "tv", label: "TV Shows", itemType: "Series", singular: "show", plural: "shows" },
-  { value: "collections", label: "Collections", itemType: "BoxSet", singular: "collection", plural: "collections" },
+export const LIBRARY_KINDS: {
+  value: LibraryKind;
+  label: string;
+  itemTypes: BaseItemKind[];
+  singular: string;
+  plural: string;
+  /** Always applied (the Favorites tab is "favourited movies, shows and collections"). */
+  fixedFilter?: ItemFilter;
+}[] = [
+  { value: "movies", label: "Movies", itemTypes: ["Movie"], singular: "movie", plural: "movies" },
+  { value: "tv", label: "TV Shows", itemTypes: ["Series"], singular: "show", plural: "shows" },
+  { value: "collections", label: "Collections", itemTypes: ["BoxSet"], singular: "collection", plural: "collections" },
+  { value: "favorites", label: "Favorites", itemTypes: ["Movie", "Series", "BoxSet"], singular: "favorite", plural: "favorites", fixedFilter: "IsFavorite" },
 ];
 
 export const LIBRARY_SORTS: { value: LibrarySort; label: string; sortBy: ItemSortBy[]; sortOrder: SortOrder[] }[] = [
@@ -99,11 +108,11 @@ export const LIBRARY_PAGE_SIZE = 100;
 
 /** Infinite, offset-paginated item list for the current library state. */
 export function useLibraryItems(state: LibraryState) {
-  const { itemType } = kindInfo(state.kind);
+  const { itemTypes, fixedFilter } = kindInfo(state.kind);
   const sort = LIBRARY_SORTS.find((s) => s.value === state.sort) ?? LIBRARY_SORTS[0];
-  const filters = LIBRARY_FILTERS.filter((f) => state.filters.includes(f.value)).map((f) => f.filter);
+  const filters = [...new Set([...(fixedFilter ? [fixedFilter] : []), ...LIBRARY_FILTERS.filter((f) => state.filters.includes(f.value)).map((f) => f.filter)])];
   const keyParams = {
-    type: itemType,
+    type: state.kind,
     genre: state.genre,
     sort: state.sort,
     filters: [...state.filters].sort(),
@@ -116,7 +125,7 @@ export function useLibraryItems(state: LibraryState) {
       (
         await getLibraryApi(jf).getItems(
           {
-            includeItemTypes: [itemType],
+            includeItemTypes: itemTypes,
             recursive: true,
             startIndex,
             limit: LIBRARY_PAGE_SIZE,
@@ -139,7 +148,7 @@ export function useLibraryItems(state: LibraryState) {
 }
 
 /** Kept outside the ["jf","library"] list prefix so list invalidations don't refetch it. */
-export const libraryTotalKey = (itemType: BaseItemKind) => ["jf", "library-total", itemType] as const;
+export const libraryTotalKey = (kind: LibraryKind) => ["jf", "library-total", kind] as const;
 
 /**
  * Unfiltered total for the header subtitle ("69 movies"). Limit 0: count only.
@@ -147,15 +156,15 @@ export const libraryTotalKey = (itemType: BaseItemKind) => ["jf", "library-total
  * first page's TotalRecordCount already is the total (pass enabled=false).
  */
 export function useLibraryTotal(kind: LibraryKind, enabled = true) {
-  const { itemType } = kindInfo(kind);
+  const { itemTypes, fixedFilter } = kindInfo(kind);
   return useJfQuery({
-    queryKey: libraryTotalKey(itemType),
+    queryKey: libraryTotalKey(kind),
     enabled,
     staleTime: 5 * 60_000,
     queryFn: async ({ signal }) =>
       (
         await getLibraryApi(jf).getItems(
-          { includeItemTypes: [itemType], recursive: true, limit: 0, enableTotalRecordCount: true, enableImages: false, enableUserData: false },
+          { includeItemTypes: itemTypes, filters: fixedFilter ? [fixedFilter] : undefined, recursive: true, limit: 0, enableTotalRecordCount: true, enableImages: false, enableUserData: false },
           { signal },
         )
       ).data.TotalRecordCount ?? 0,
@@ -164,14 +173,14 @@ export function useLibraryTotal(kind: LibraryKind, enabled = true) {
 
 /** Genres that actually occur in this item type. */
 export function useLibraryGenres(kind: LibraryKind) {
-  const { itemType } = kindInfo(kind);
+  const { itemTypes } = kindInfo(kind);
   return useJfQuery<BaseItemDto[]>({
-    queryKey: jfKeys.genres(itemType),
+    queryKey: jfKeys.genres(itemTypes.join(",")),
     staleTime: 10 * 60_000,
     queryFn: async ({ signal }) =>
       (
         await getGenreApi(jf).getGenres(
-          { includeItemTypes: [itemType], sortBy: ["SortName"], sortOrder: ["Ascending"], enableImages: false, enableTotalRecordCount: false },
+          { includeItemTypes: itemTypes, sortBy: ["SortName"], sortOrder: ["Ascending"], enableImages: false, enableTotalRecordCount: false },
           { signal },
         )
       ).data.Items ?? [],

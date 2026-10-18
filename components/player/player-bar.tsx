@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ListMusic,
   MicVocal,
@@ -20,111 +20,16 @@ import {
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { Spinner } from "@/components/ui/states";
-import { formatClock } from "@/lib/format";
 import { currentTrack, usePlayer } from "@/lib/player/store";
 import { LyricsPanel } from "./lyrics-panel";
+import { NowPlayingSheet } from "./now-playing-sheet";
+import { SleepTimerButton } from "./sleep-timer";
+import { SeekBar, Slider } from "./seek-bar";
 import { QueuePanel } from "./queue-panel";
 import { ArtistLinks, LikeButton, TrackArt } from "./track-bits";
 
-/** Range input styled as a thin accent bar (seek + volume). */
-function Slider({
-  value,
-  max,
-  onChange,
-  onCommit,
-  label,
-  valueText,
-  keyStep,
-  className,
-}: {
-  value: number;
-  max: number;
-  /** Arrow-key step. step="any" would make the browser step by 1 (0 ↔ 100% on a 0–1 slider). */
-  keyStep: number;
-  onChange: (v: number) => void;
-  onCommit?: (v: number) => void;
-  label: string;
-  valueText?: string;
-  className?: string;
-}) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  return (
-    <input
-      type="range"
-      min={0}
-      max={max || 1}
-      step="any"
-      value={Math.min(value, max || 1)}
-      aria-label={label}
-      aria-valuetext={valueText}
-      onChange={(e) => onChange(Number(e.target.value))}
-      onPointerUp={(e) => onCommit?.(Number((e.target as HTMLInputElement).value))}
-      onKeyDown={(e) => {
-        const dir = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
-        if (!dir) return;
-        e.preventDefault();
-        const v = Math.min(Math.max(0, value + dir * keyStep), max || 1);
-        onChange(v);
-        onCommit?.(v);
-      }}
-      onKeyUp={(e) => {
-        if (!e.key.startsWith("Arrow")) onCommit?.(Number((e.target as HTMLInputElement).value));
-      }}
-      style={{ "--pct": `${pct}%` } as CSSProperties}
-      className={cn(
-        "jelly-range h-4 w-full cursor-pointer appearance-none bg-transparent",
-        className,
-      )}
-    />
-  );
-}
-
-function SeekBar({ compact }: { compact?: boolean }) {
-  const currentTime = usePlayer((s) => s.currentTime);
-  const duration = usePlayer((s) => s.duration);
-  const seek = usePlayer((s) => s.seek);
-  // While dragging, show the drag position instead of live playback time.
-  const [drag, setDrag] = useState<number | null>(null);
-  // Pointer hover position (fraction 0–1) for the time tooltip.
-  const [hover, setHover] = useState<number | null>(null);
-  const shown = drag ?? currentTime;
-  return (
-    <div className={cn("flex w-full items-center gap-2 text-[11px] text-muted tabular-nums", compact && "gap-0")}>
-      {!compact && <span className="w-10 text-right">{formatClock(shown)}</span>}
-      <div
-        className="relative flex flex-1 items-center"
-        onPointerMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          setHover(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)));
-        }}
-        onPointerLeave={() => setHover(null)}
-      >
-        {hover !== null && duration > 0 && (
-          <span
-            aria-hidden="true"
-            className="jelly-panel pointer-events-none absolute bottom-full mb-2 -translate-x-1/2 rounded-full px-2 py-0.5 text-xs font-semibold text-text"
-            style={{ left: `${hover * 100}%` }}
-          >
-            {formatClock(hover * duration)}
-          </span>
-        )}
-      <Slider
-        value={shown}
-        max={duration}
-        label="Seek"
-        keyStep={5}
-        valueText={`${formatClock(shown)} of ${formatClock(duration)}`}
-        onChange={setDrag}
-        onCommit={(v) => {
-          seek(v);
-          setDrag(null);
-        }}
-      />
-      </div>
-      {!compact && <span className="w-10">{formatClock(duration)}</span>}
-    </div>
-  );
-}
+/** ↑/↓ volume changes ask the slider to show its percent bubble briefly. */
+const volumeKeyFlash = new EventTarget();
 
 function VolumeControl() {
   const volume = usePlayer((s) => s.volume);
@@ -132,6 +37,20 @@ function VolumeControl() {
   const setVolume = usePlayer((s) => s.setVolume);
   const toggleMute = usePlayer((s) => s.toggleMute);
   const [showTip, setShowTip] = useState(false);
+  const [flash, setFlash] = useState(false);
+  useEffect(() => {
+    let t: number | undefined;
+    const on = () => {
+      setFlash(true);
+      window.clearTimeout(t);
+      t = window.setTimeout(() => setFlash(false), 1200);
+    };
+    volumeKeyFlash.addEventListener("flash", on);
+    return () => {
+      volumeKeyFlash.removeEventListener("flash", on);
+      window.clearTimeout(t);
+    };
+  }, []);
   const Icon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
   const pct = Math.round((muted ? 0 : volume) * 100);
   return (
@@ -147,7 +66,7 @@ function VolumeControl() {
         onFocus={() => setShowTip(true)}
         onBlur={() => setShowTip(false)}
       >
-        {showTip && (
+        {(showTip || flash) && (
           <span
             aria-hidden="true"
             className="jelly-panel pointer-events-none absolute bottom-full mb-2 -translate-x-1/2 rounded-full px-2 py-0.5 text-xs font-semibold text-text tabular-nums"
@@ -181,6 +100,7 @@ export function PlayerBar() {
   const { togglePlay, next, prev, toggleShuffle, cycleRepeat, setPanel } = usePlayer.getState();
   // Close: slide the bar away, then clear the queue (the toast offers Undo).
   const [leaving, setLeaving] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const closeTimer = useRef<number | undefined>(undefined);
   const close = () => {
     if (leaving) return;
@@ -191,15 +111,16 @@ export function PlayerBar() {
     }, 220);
   };
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
 
-  // Keyboard: Space = play/pause, ←/→ = seek 5s. Ignored while typing, on
-  // focused controls that use those keys themselves, or with modifiers.
+  // Keyboard: Space = play/pause, ←/→ = seek 5s, ↑/↓ = volume ±5%. Ignored
+  // while typing, on focused controls that use those keys themselves, or with modifiers.
   useEffect(() => {
     if (!track) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
       const target = e.target as HTMLElement | null;
-      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="slider"], [role="menu"], [role="dialog"]')) return;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="slider"], [role="menu"], [role="listbox"], [role="dialog"]')) return;
       const s = usePlayer.getState();
       if (e.key === " " || e.code === "Space") {
         if (target?.closest("button, a, [role='button'], summary")) return;
@@ -209,6 +130,11 @@ export function PlayerBar() {
         if (target?.closest("[role='group'], [role='tablist']")) return;
         e.preventDefault();
         s.seek(Math.min(Math.max(0, s.currentTime + (e.key === "ArrowRight" ? 5 : -5)), s.duration || Infinity));
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const cur = s.muted ? 0 : s.volume;
+        s.setVolume(Math.round(Math.min(1, Math.max(0, cur + (e.key === "ArrowUp" ? 0.05 : -0.05))) * 100) / 100);
+        volumeKeyFlash.dispatchEvent(new Event("flash"));
       }
     };
     window.addEventListener("keydown", onKey);
@@ -232,8 +158,12 @@ export function PlayerBar() {
     const ro = new ResizeObserver(measure);
     ro.observe(bar);
     window.addEventListener("resize", measure);
+    // Music's phone tab bar lifts the bar without resizing it.
+    const mo = new MutationObserver(() => requestAnimationFrame(measure));
+    mo.observe(html, { attributes: true, attributeFilter: ["data-music-tabs"] });
     return () => {
       ro.disconnect();
+      mo.disconnect();
       window.removeEventListener("resize", measure);
       html.removeAttribute("data-player");
       html.style.removeProperty("--player-space");
@@ -252,33 +182,46 @@ export function PlayerBar() {
       {panel === "queue" && <QueuePanel />}
       {/* Keyed by track: a new track remounts the panel (follow mode + scroll reset). */}
       {panel === "lyrics" && <LyricsPanel key={track.uid} />}
+      {sheetOpen && (
+        <NowPlayingSheet
+          onClose={closeSheet}
+          onClosePlayer={() => {
+            setSheetOpen(false);
+            close();
+          }}
+        />
+      )}
       <section
         ref={barRef}
         aria-label="Music player"
         className={cn(
-          "jelly fixed inset-x-2 bottom-2 z-40 rounded-panel px-3 pt-2 pb-2 transition-[translate,opacity] duration-200 ease-in sm:inset-x-3 sm:bottom-3 md:px-4 md:py-2.5",
+          "jelly fixed inset-x-2 bottom-[calc(var(--tabs-space,0px)+0.5rem)] z-40 rounded-panel px-3 pt-2 pb-2 transition-[translate,opacity] duration-200 ease-in sm:inset-x-3 sm:bottom-[calc(var(--tabs-space,0px)+0.75rem)] md:px-4 md:py-2.5",
           leaving && "pointer-events-none translate-y-[calc(100%+1rem)] opacity-0",
         )}
       >
         {/* Phone: thin seek along the top edge */}
         <div className="md:hidden">
-          <SeekBar compact />
+          <SeekBar variant="compact" />
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
           {/* Now playing. Hovering (or tabbing into) it reveals Close; paused keeps Close visible. */}
-          <div className="group/np -my-1 -ml-1.5 flex min-w-0 items-center gap-3 justify-self-start rounded-card py-1 pr-1.5 pl-1.5 transition-colors hover:bg-overlay focus-within:bg-overlay">
-            {albumHref ? (
-              <Link href={albumHref} aria-label={`Open album ${track.Album ?? ""}`} className="shrink-0">
+          <div className="group/np -my-1 -ml-1.5 flex max-w-full min-w-0 items-center gap-3 justify-self-start rounded-card py-1 pr-1.5 pl-1.5 transition-colors hover:bg-overlay focus-within:bg-overlay">
+            <div className="relative flex min-w-0 items-center gap-3">
+              {albumHref ? (
+                <Link href={albumHref} aria-label={`Open album ${track.Album ?? ""}`} className="shrink-0">
+                  <TrackArt item={track} size={56} className="size-12 md:size-14" />
+                </Link>
+              ) : (
                 <TrackArt item={track} size={56} className="size-12 md:size-14" />
-              </Link>
-            ) : (
-              <TrackArt item={track} size={56} className="size-12 md:size-14" />
-            )}
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-text">{track.Name}</p>
-              <p className="truncate text-xs text-muted">
-                {error ? <span className="text-danger">{error}</span> : <ArtistLinks item={track} />}
-              </p>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-text">{track.Name}</p>
+                <p className="truncate text-xs text-muted">
+                  {error ? <span className="text-danger">{error}</span> : <ArtistLinks item={track} />}
+                </p>
+              </div>
+              {/* Phone: tap the mini player to open the full-screen Now Playing. */}
+              <button type="button" onClick={() => setSheetOpen(true)} aria-label="Open Now Playing" className="absolute inset-0 md:hidden" />
             </div>
             <LikeButton item={track} className="hidden sm:inline-flex" />
             <button
@@ -341,6 +284,7 @@ export function PlayerBar() {
 
           {/* Extras */}
           <div className="hidden items-center justify-end gap-1 md:flex">
+            <SleepTimerButton />
             <button
               type="button"
               onClick={() => setPanel("lyrics")}

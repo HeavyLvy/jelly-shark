@@ -61,8 +61,13 @@ interface PlayerState {
   seekRequest: { time: number; nonce: number } | null;
   /** What close() cleared, for the "Playback closed · Undo" toast (not persisted). */
   closed: ClosedSnapshot | null;
-  /** Position the engine should load the current track at (set by undoClose), then cleared. */
-  resumeAt: number | null;
+  /** Sleep timer: pause at this time (epoch ms), or after the current song. Not persisted. */
+  sleepAt: number | null;
+  sleepEndOfTrack: boolean;
+  /** Minutes from now, "end" of the current song, or null to cancel. */
+  setSleepTimer: (t: number | "end" | null) => void;
+  /** Where to start a specific queue entry when it next loads (undo-close, resume after a refresh); used once. */
+  resumeAt: { uid: string; t: number } | null;
 
   playItems: (items: BaseItemDto[], startIndex?: number, source?: PlaySource, opts?: { shuffle?: boolean }) => void;
   playNext: (items: BaseItemDto[]) => void;
@@ -156,6 +161,10 @@ export const usePlayer = create<PlayerState>()(
       seekRequest: null,
       closed: null,
       resumeAt: null,
+      sleepAt: null,
+      sleepEndOfTrack: false,
+      setSleepTimer: (t) =>
+        set(t === null ? { sleepAt: null, sleepEndOfTrack: false } : t === "end" ? { sleepAt: null, sleepEndOfTrack: true } : { sleepAt: Date.now() + t * 60_000, sleepEndOfTrack: false }),
 
       playItems: (items, startIndex = 0, source, opts) => {
         const playable = items.filter((i) => i.Id && (i.Type === "Audio" || i.MediaType === "Audio"));
@@ -191,7 +200,7 @@ export const usePlayer = create<PlayerState>()(
 
       jumpTo: (index) => {
         if (index < 0 || index >= get().queue.length) return;
-        set({ index, playing: true, currentTime: 0, error: null });
+        set({ index, playing: true, currentTime: 0, error: null, resumeAt: null });
       },
 
       removeAt: (i) => {
@@ -220,18 +229,18 @@ export const usePlayer = create<PlayerState>()(
       next: (auto = false) => {
         const { queue, index, repeat } = get();
         if (queue.length === 0) return;
-        if (auto && repeat === "one") return set({ seekRequest: { time: 0, nonce: Date.now() }, playing: true });
-        if (index + 1 < queue.length) return set({ index: index + 1, currentTime: 0, playing: true, error: null });
-        if (repeat === "all" || !auto) return set({ index: 0, currentTime: 0, playing: auto ? true : get().playing, error: null });
+        if (auto && repeat === "one") return set({ seekRequest: { time: 0, nonce: Date.now() }, playing: true, resumeAt: null });
+        if (index + 1 < queue.length) return set({ index: index + 1, currentTime: 0, playing: true, error: null, resumeAt: null });
+        if (repeat === "all" || !auto) return set({ index: 0, currentTime: 0, playing: auto ? true : get().playing, error: null, resumeAt: null });
         set({ playing: false });
       },
 
       prev: () => {
         const { index, currentTime, queue, repeat } = get();
-        if (currentTime > 3 || queue.length === 0) return set({ seekRequest: { time: 0, nonce: Date.now() } });
-        if (index > 0) return set({ index: index - 1, currentTime: 0, error: null });
-        if (repeat === "all") return set({ index: queue.length - 1, currentTime: 0, error: null });
-        set({ seekRequest: { time: 0, nonce: Date.now() } });
+        if (currentTime > 3 || queue.length === 0) return set({ seekRequest: { time: 0, nonce: Date.now() }, currentTime: 0, resumeAt: null });
+        if (index > 0) return set({ index: index - 1, currentTime: 0, error: null, resumeAt: null });
+        if (repeat === "all") return set({ index: queue.length - 1, currentTime: 0, error: null, resumeAt: null });
+        set({ seekRequest: { time: 0, nonce: Date.now() }, currentTime: 0, resumeAt: null });
       },
 
       togglePlay: () => set({ playing: !get().playing }),
@@ -247,10 +256,15 @@ export const usePlayer = create<PlayerState>()(
       undoClose: () => {
         const c = get().closed;
         if (!c) return;
-        set({ queue: c.queue, index: c.index, unshuffled: c.unshuffled, source: c.source, currentTime: c.currentTime, resumeAt: c.currentTime, playing: c.playing, error: null, closed: null });
+        set({ queue: c.queue, index: c.index, unshuffled: c.unshuffled, source: c.source, currentTime: c.currentTime, resumeAt: c.queue[c.index] ? { uid: c.queue[c.index].uid, t: c.currentTime } : null, playing: c.playing, error: null, closed: null });
       },
       dismissClosed: () => set({ closed: null }),
-      seek: (time) => set({ seekRequest: { time: Math.max(0, time), nonce: Date.now() }, currentTime: Math.max(0, time) }),
+      seek: (time) => {
+        const t = Math.max(0, time);
+        const cur = get().queue[get().index];
+        // Before anything has loaded (e.g. paused after a refresh), remember the spot for the first load.
+        set({ seekRequest: { time: t, nonce: Date.now() }, currentTime: t, resumeAt: cur ? { uid: cur.uid, t } : null });
+      },
       setVolume: (volume) => set({ volume: Math.min(1, Math.max(0, volume)), muted: false }),
       toggleMute: () => set({ muted: !get().muted }),
 

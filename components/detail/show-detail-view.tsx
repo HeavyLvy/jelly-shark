@@ -16,6 +16,7 @@ import { DetailError, DetailHero, DetailNotFound, DetailSkeleton, GUTTER, Sectio
 import { EpisodeList } from "./episode-list";
 import { InfoPanel, peopleRows, streamRows, streamsOf } from "./info-panel";
 import { CastRow, MoreLikeThis } from "./rows";
+import { ExtrasRow, TrailerButton } from "./extras";
 
 function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -64,6 +65,7 @@ function SeriesDetail({ series }: { series: BaseItemDto }) {
         actions={
           <>
             <SeriesPlayButton nextUp={nextUp.data} first={first.data} pending={nextUp.isPending || (!nextUp.data && first.isPending)} />
+            <TrailerButton item={series} />
             <ShuffleButton seriesId={seriesId} />
             <AddToListButton item={series} />
             <FavoriteButton item={series} />
@@ -73,6 +75,7 @@ function SeriesDetail({ series }: { series: BaseItemDto }) {
       />
       <div className="mt-4 flex flex-col gap-14">
         <EpisodesSection seriesId={seriesId} seasons={seasons} nextUp={nextUp} />
+        <ExtrasRow item={series} />
         <CastRow people={series.People ?? []} />
         <MoreLikeThis itemId={seriesId} />
       </div>

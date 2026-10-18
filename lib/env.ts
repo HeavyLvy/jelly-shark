@@ -3,7 +3,7 @@ import "server-only";
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`Missing ${name}. Set it in .env.local (see .env.example).`);
+    throw new Error(`Missing ${name}. Set it in .env.local, or as an environment variable (see .env.example).`);
   }
   return value;
 }

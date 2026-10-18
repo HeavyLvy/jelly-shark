@@ -8,6 +8,7 @@ import { Heart, LibraryBig, Plus, Search, X } from "lucide-react";
 import { JfImage } from "@/components/media/jf-image";
 import { Chip } from "@/components/ui/chip";
 import { cn } from "@/components/ui/cn";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { pickImage } from "@/lib/jellyfin/images";
 import { LIKED_ID, useMusicPlaylists, usePlayedAlbums, useTopArtists } from "@/lib/queries/music";
@@ -41,6 +42,7 @@ export function LibrarySidebar() {
   const [searching, setSearching] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [order, setOrder] = useState<"recents" | "alpha">("recents");
   const playlists = useMusicPlaylists();
   const albums = usePlayedAlbums(30);
   const artists = useTopArtists(30);
@@ -53,8 +55,9 @@ export function LibrarySidebar() {
       ...(artists.data ?? []).map((a) => toEntry(a, "artists")),
     ];
     const q = query.trim().toLowerCase();
-    return all.filter((e) => (!kind || e.kind === kind) && (!q || e.name.toLowerCase().includes(q)));
-  }, [playlists.data, albums.data, artists.data, kind, query]);
+    const shown = all.filter((e) => (!kind || e.kind === kind) && (!q || e.name.toLowerCase().includes(q)));
+    return order === "alpha" ? [...shown].sort((x, y) => x.name.localeCompare(y.name)) : shown;
+  }, [playlists.data, albums.data, artists.data, kind, query, order]);
 
   const loading = playlists.isPending || albums.isPending || artists.isPending;
   const failed = playlists.isError && albums.isError && artists.isError;
@@ -135,7 +138,19 @@ export function LibrarySidebar() {
             <Search className="size-4" aria-hidden="true" />
           </button>
         )}
-        {!searching && <span className="text-xs text-muted">Recents</span>}
+        {!searching && (
+          <SelectMenu
+            value={order}
+            options={[
+              { value: "recents", label: "Recents" },
+              { value: "alpha", label: "Alphabetical" },
+            ]}
+            onChange={setOrder}
+            label="Sort Your Library by"
+            size="sm"
+            className="[&>button]:h-7 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:shadow-none [&>button]:text-muted"
+          />
+        )}
       </div>
       <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {showLiked && (

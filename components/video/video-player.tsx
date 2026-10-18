@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type Hls from "hls.js";
 import type { BaseItemDto, MediaSegmentDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { getMediaSegmentApi } from "@jellyfin/sdk/lib/utils/api/media-segment-api";
@@ -9,8 +9,10 @@ import { getSessionApi } from "@jellyfin/sdk/lib/utils/api/session-api";
 import { getShowApi } from "@jellyfin/sdk/lib/utils/api/show-api";
 import {
   ArrowLeft,
+  ListOrdered,
+  MonitorPlay,
   Check,
-  Gauge,
+  Settings,
   Maximize,
   Minimize,
   Pause,
@@ -29,10 +31,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { ErrorState, Spinner } from "@/components/ui/states";
 import { TICKS_PER_SECOND, episodeCode, formatClock } from "@/lib/format";
-import { jf } from "@/lib/jellyfin/client";
+import { jf, jfUrl } from "@/lib/jellyfin/client";
 import { pickImage } from "@/lib/jellyfin/images";
-import { audioStreams, chooseTracks, negotiateVideo, streamLabel, subtitleStreams, type TrackChoice, type VideoSource } from "@/lib/player/video-negotiate";
-import { QUALITY_OPTIONS, readVideoPrefs, writeVideoPrefs, type VideoPrefs } from "@/lib/player/video-prefs";
+import { audioStreams, chooseTracks, negotiateVideo, streamLabel, subtitleSrc, subtitleStreams, type TrackChoice, type VideoSource } from "@/lib/player/video-negotiate";
+import { PLAYBACK_SPEEDS, QUALITY_OPTIONS, SUBTITLE_SIZES, readVideoPrefs, writeVideoPrefs, type SubtitleSize, type SubtitleStyle, type VideoPrefs } from "@/lib/player/video-prefs";
 import { usePlayer } from "@/lib/player/store";
 import { useItem } from "@/lib/queries/items";
 import { useJfQuery } from "@/lib/queries/use-jf-query";
@@ -95,6 +97,8 @@ function Player({ item }: { item: BaseItemDto }) {
   const hideTimer = useRef<number | undefined>(undefined);
 
   const [prefs, setPrefs] = useState<VideoPrefs>(() => readVideoPrefs());
+  /** Browser's own controls (our overlays, taps and shortcuts step aside). */
+  const native = prefs.nativeControls;
   const [choice, setChoice] = useState<TrackChoice>(() => chooseTracks(item, readVideoPrefs()));
   /** The choice the current stream was negotiated with. Text-subtitle switches only change `choice`. */
   const [negotiated, setNegotiated] = useState<TrackChoice>(choice);
@@ -109,7 +113,6 @@ function Player({ item }: { item: BaseItemDto }) {
   /** Last subtitle index turned on in this video (what "c" restores). */
   const lastSubRef = useRef<number | null>(null);
   const toggleSubsRef = useRef<() => void>(() => {});
-  const trackElRef = useRef<HTMLTrackElement>(null);
   const [maxBitrate, setMaxBitrate] = useState<number | null>(() => readVideoPrefs().maxBitrate);
   const [attempt, setAttempt] = useState(0);
   const [source, setSource] = useState<VideoSource | null>(null);
@@ -121,8 +124,14 @@ function Player({ item }: { item: BaseItemDto }) {
   const [duration, setDuration] = useState(item.RunTimeTicks ? item.RunTimeTicks / TICKS_PER_SECOND : 0);
   const [buffered, setBuffered] = useState(0);
   const [controls, setControls] = useState(true);
-  const [menu, setMenu] = useState<"none" | "tracks" | "quality">("none");
+  const [menu, setMenu] = useState<"none" | "tracks" | "settings" | "chapters">("none");
+  /** Playback speed (per video, not remembered). */
+  const [speed, setSpeed] = useState(1);
+  /** Subtitle timing offset in seconds (+ = later). Per video. */
+  const [subOffset, setSubOffset] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
+  /** The <video> itself is fullscreen (touch): show the browser's controls there. */
+  const [videoFullscreen, setVideoFullscreen] = useState(false);
   const [ended, setEnded] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [dismissedNext, setDismissedNext] = useState(false);
@@ -134,6 +143,15 @@ function Player({ item }: { item: BaseItemDto }) {
   const [slowTrack, setSlowTrack] = useState<string | null>(null);
 
   const itemId = item.Id ?? "";
+  /** Seek-bar thumbnails (Jellyfin trickplay), when the server has generated them. */
+  const preview = useMemo(() => trickplayFor(item, source?.mediaSourceId), [item, source?.mediaSourceId]);
+  /** Chapters (seconds + name), when the file has more than one. */
+  const chapters = useMemo(
+    () => (item.Chapters ?? []).filter((c) => typeof c.StartPositionTicks === "number").map((c, i) => ({ start: (c.StartPositionTicks ?? 0) / 10_000_000, name: c.Name || `Chapter ${i + 1}` })),
+    [item],
+  );
+  /** Text subtitles, all attached as <track>s (see the subtitle effect). */
+  const textSubs = useMemo(() => subtitleStreams(item).filter((s) => s.IsTextSubtitleStream), [item]);
   const isEpisode = item.Type === "Episode";
   const title = isEpisode ? item.SeriesName ?? item.Name : item.Name;
   const subtitle = isEpisode ? [episodeCode(item), item.Name].filter(Boolean).join(" · ") : item.ProductionYear ? String(item.ProductionYear) : "";
@@ -316,9 +334,24 @@ function Player({ item }: { item: BaseItemDto }) {
     v.currentTime = Math.min(Math.max(0, t), (v.duration || duration) - 0.5);
   }, [duration]);
   const seekBy = useCallback((d: number) => seekTo((videoRef.current?.currentTime ?? 0) + d), [seekTo]);
+  // Touch screens: fullscreen the <video> itself so the phone's own player UI
+  // takes over (and try landscape); desktop: fullscreen our whole player.
   const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void containerRef.current?.requestFullscreen();
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    const v = videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+    if (v && window.matchMedia("(pointer: coarse)").matches) {
+      if (v.requestFullscreen) {
+        void v
+          .requestFullscreen({ navigationUI: "hide" })
+          .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.("landscape"))
+          .catch(() => {});
+      } else v.webkitEnterFullscreen?.(); // iPhone Safari
+      return;
+    }
+    void containerRef.current?.requestFullscreen();
   }, []);
   const togglePip = async () => {
     const v = videoRef.current;
@@ -345,10 +378,45 @@ function Player({ item }: { item: BaseItemDto }) {
   useEffect(() => () => window.clearTimeout(hideTimer.current), []);
   const controlsShown = controls || !playing || menu !== "none" || !!error;
 
+  /* ---------- touch: tap toggles controls, double-tap a side seeks ±10s ---------- */
+  const lastPointer = useRef<string>("mouse");
+  const tapState = useRef<{ at: number; side: "left" | "right" | "centre"; timer?: number }>({ at: 0, side: "centre" });
+  const [seekFlash, setSeekFlash] = useState<{ side: "left" | "right"; amount: number; key: number } | null>(null);
+  const seekFlashTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(seekFlashTimer.current), []);
+  const onVideoTap = (clientX: number) => {
+    const w = containerRef.current?.clientWidth || window.innerWidth;
+    const side = clientX < w / 3 ? "left" : clientX > (w * 2) / 3 ? "right" : "centre";
+    const t = tapState.current;
+    const now = performance.now();
+    const isDouble = now - t.at < 300 && side === t.side && side !== "centre";
+    window.clearTimeout(t.timer);
+    if (isDouble || (seekFlash && seekFlash.side === side && now - t.at < 700)) {
+      // Each extra quick tap on the same side adds another 10s.
+      const dir = side === "left" ? -1 : 1;
+      seekBy(dir * 10);
+      setSeekFlash((f) => ({ side: side as "left" | "right", amount: f && f.side === side ? f.amount + 10 : 10, key: now }));
+      window.clearTimeout(seekFlashTimer.current);
+      seekFlashTimer.current = window.setTimeout(() => setSeekFlash(null), 700);
+      tapState.current = { at: now, side };
+      return;
+    }
+    tapState.current = {
+      at: now,
+      side,
+      // Wait briefly so a double-tap doesn't also toggle the controls.
+      timer: window.setTimeout(() => {
+        if (menu !== "none") setMenu("none");
+        else if (controls) setControls(false);
+        else poke();
+      }, 250),
+    };
+  };
+
   /* ---------- keyboard ---------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (native || e.altKey || e.ctrlKey || e.metaKey) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("input, textarea, select, [contenteditable='true']")) return;
       const k = e.key.toLowerCase();
@@ -388,17 +456,22 @@ function Player({ item }: { item: BaseItemDto }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, seekBy, toggleFullscreen, poke, menu, prefs.volume, flashOsd]);
+  }, [togglePlay, seekBy, toggleFullscreen, poke, menu, prefs.volume, flashOsd, native]);
 
   useEffect(() => {
-    const onFs = () => setFullscreen(!!document.fullscreenElement);
+    const onFs = () => {
+      setFullscreen(!!document.fullscreenElement);
+      setVideoFullscreen(!!document.fullscreenElement && document.fullscreenElement === videoRef.current);
+      if (!document.fullscreenElement) (screen.orientation as ScreenOrientation & { unlock?: () => void }).unlock?.();
+    };
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
   /* ---------- autoplay countdown after the episode ends ---------- */
   useEffect(() => {
-    if (!ended || !next || dismissedNext) return;
+    // Settings → "Autoplay next episode" off: the card stays, without a countdown.
+    if (!ended || !next || dismissedNext || !prefs.autoplayNext) return;
     let n = AUTOPLAY_COUNTDOWN_S;
     const tick = window.setInterval(() => {
       n -= 1;
@@ -410,7 +483,7 @@ function Player({ item }: { item: BaseItemDto }) {
     }, 1000);
     window.setTimeout(() => setCountdown(AUTOPLAY_COUNTDOWN_S), 0);
     return () => window.clearInterval(tick);
-  }, [ended, next, dismissedNext, goNext]);
+  }, [ended, next, dismissedNext, goNext, prefs.autoplayNext]);
 
   /* ---------- track / quality changes ---------- */
   const changeTracks = (patch: Partial<TrackChoice>) => {
@@ -432,7 +505,7 @@ function Player({ item }: { item: BaseItemDto }) {
         ...source,
         subtitleIndex: nextChoice.subtitleIndex,
         textTrack: newSub
-          ? { src: `/api/jf/Videos/${itemId}/${source.mediaSourceId}/Subtitles/${newSub.Index}/0/Stream.vtt`, lang: newSub.Language ?? "und", label: streamLabel(newSub) }
+          ? { src: subtitleSrc(itemId, source.mediaSourceId, newSub.Index), lang: newSub.Language ?? "und", label: streamLabel(newSub) }
           : null,
       });
       setChoice(nextChoice);
@@ -445,7 +518,8 @@ function Player({ item }: { item: BaseItemDto }) {
   };
 
   // "c": subtitles off ↔ on. On = the last subtitle used in this video, else the
-  // last language used anywhere, else the first subtitle in the list.
+  // last language used anywhere, else the first subtitle in the list. Text
+  // subtitles win over picture ones (PGS/DVD), which force a burn-in re-encode.
   const toggleSubtitles = () => {
     const subs = subtitleStreams(item);
     if (subs.length === 0) return flashOsd({ icon: "subs", text: "No subtitles" });
@@ -457,7 +531,11 @@ function Player({ item }: { item: BaseItemDto }) {
     const lang = readVideoPrefs().lastSubtitleLang;
     const byLang = lang ? subs.filter((s) => s.Language?.toLowerCase() === lang.toLowerCase()) : [];
     const pick =
-      subs.find((s) => s.Index === lastSubRef.current) ?? byLang.find((s) => s.IsTextSubtitleStream) ?? byLang[0] ?? subs[0];
+      subs.find((s) => s.Index === lastSubRef.current) ??
+      byLang.find((s) => s.IsTextSubtitleStream) ??
+      subs.find((s) => s.IsTextSubtitleStream) ??
+      byLang[0] ??
+      subs[0];
     changeTracks({ subtitleIndex: pick.Index ?? -1 });
     flashOsd({ icon: "subs", text: `Subtitles: ${streamLabel(pick)}` });
   };
@@ -465,14 +543,22 @@ function Player({ item }: { item: BaseItemDto }) {
     toggleSubsRef.current = toggleSubtitles;
   });
 
+  // Every text subtitle stays attached as a <track>; switching only changes
+  // which one is "showing". Removing/re-adding <track>s while a cue is on
+  // screen can leave a stale caption frozen in some browsers. Disabled tracks
+  // aren't downloaded, so this costs nothing.
   // React doesn't wire onLoad/onError for <track>, so listen natively. A cached
   // track can finish before we attach, hence the readyState check.
   const trackSrc = source?.textTrack?.src;
+  const msId = source?.mediaSourceId;
   useEffect(() => {
-    const el = trackElRef.current;
+    const tracks = Array.from(videoRef.current?.querySelectorAll("track") ?? []);
+    const want = trackSrc ? new URL(trackSrc, window.location.origin).href : null;
+    for (const t of tracks) t.track.mode = t.src === want ? "showing" : "disabled";
+    const el = tracks.find((t) => t.src === want);
     if (!el || !trackSrc) return;
     const loaded = () => {
-      el.track.mode = "showing";
+      if (el.track.mode !== "showing") return;
       setLoadedTrack(el.src);
     };
     const failed = () => setTrackError(el.src);
@@ -486,7 +572,22 @@ function Player({ item }: { item: BaseItemDto }) {
       el.removeEventListener("load", loaded);
       el.removeEventListener("error", failed);
     };
-  }, [trackSrc]);
+  }, [trackSrc, msId]);
+
+  // Speed survives source changes (a new src resets playbackRate).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.defaultPlaybackRate = speed;
+    v.playbackRate = speed;
+  }, [speed, source]);
+
+  // Subtitle timing: shift every cue of the showing track by the offset (originals kept per cue).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    for (const t of Array.from(v.textTracks)) if (t.mode === "showing") shiftCues(t, subOffset);
+  }, [subOffset, trackSrc, loadedTrack]);
 
   const changeQuality = (value: number | null) => {
     positionRef.current = videoRef.current?.currentTime ?? positionRef.current;
@@ -510,19 +611,28 @@ function Player({ item }: { item: BaseItemDto }) {
   return (
     <div
       ref={containerRef}
-      onPointerMove={poke}
-      onPointerDown={poke}
+      data-sub-size={prefs.subtitleSize}
+      data-sub-style={prefs.subtitleStyle}
+      onPointerMove={(e) => e.pointerType !== "touch" && poke()}
+      onPointerDown={(e) => {
+        lastPointer.current = e.pointerType;
+        // Touches on the video are handled by onVideoTap (tap toggles controls).
+        if (e.pointerType !== "touch" || e.target !== videoRef.current) poke();
+      }}
       className={cn("fixed inset-0 overflow-hidden bg-black select-none", !controlsShown && "cursor-none")}
     >
       <video
         ref={videoRef}
         className="absolute inset-0 size-full bg-black object-contain"
         playsInline
-        onClick={() => {
+        controls={native || videoFullscreen}
+        onClick={(e) => {
+          if (native) return;
+          if (lastPointer.current === "touch") return onVideoTap(e.clientX);
           if (menu !== "none") setMenu("none");
           else togglePlay();
         }}
-        onDoubleClick={toggleFullscreen}
+        onDoubleClick={() => !native && lastPointer.current !== "touch" && toggleFullscreen()}
         onPlay={() => {
           setPlaying(true);
           setEnded(false);
@@ -558,17 +668,10 @@ function Player({ item }: { item: BaseItemDto }) {
           report("progress");
         }}
       >
-        {source?.textTrack && (
-          <track
-            key={source.textTrack.src}
-            kind="subtitles"
-            src={source.textTrack.src}
-            srcLang={source.textTrack.lang}
-            label={source.textTrack.label}
-            default
-            ref={trackElRef}
-          />
-        )}
+        {source &&
+          textSubs.map((s) => (
+            <track key={`${source.mediaSourceId}-${s.Index}`} kind="subtitles" src={subtitleSrc(itemId, source.mediaSourceId, s.Index)} srcLang={s.Language ?? "und"} label={streamLabel(s)} />
+          ))}
       </video>
 
       {/* Buffering / tap-to-play */}
@@ -577,10 +680,45 @@ function Player({ item }: { item: BaseItemDto }) {
           <Spinner className="size-12 border-4" label="Buffering" />
         </div>
       )}
-      {needsTap && !error && (
+      {needsTap && !error && !native && (
         <button type="button" onClick={togglePlay} aria-label="Play" className="jelly-control jelly-backdrop absolute top-1/2 left-1/2 flex size-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-text">
           <Play className="size-9 translate-x-0.5 fill-current" aria-hidden="true" />
         </button>
+      )}
+
+      {/* Touch: big centre controls while the controls are showing (YouTube-style). */}
+      {!native && !needsTap && !error && (
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 hidden items-center justify-center gap-10 transition-opacity duration-300 pointer-coarse:flex",
+            controlsShown ? "opacity-100" : "opacity-0",
+          )}
+        >
+          <CentreButton label="Back 10 seconds" shown={controlsShown} className="size-14" onClick={() => { seekBy(-10); poke(); }}>
+            <RotateCcw className="size-6" aria-hidden="true" />
+          </CentreButton>
+          <CentreButton label={playing ? "Pause" : "Play"} shown={controlsShown} className="size-[4.5rem]" onClick={() => { togglePlay(); poke(); }}>
+            {playing ? <Pause className="size-8 fill-current" aria-hidden="true" /> : <Play className="size-8 translate-x-0.5 fill-current" aria-hidden="true" />}
+          </CentreButton>
+          <CentreButton label="Forward 10 seconds" shown={controlsShown} className="size-14" onClick={() => { seekBy(10); poke(); }}>
+            <RotateCw className="size-6" aria-hidden="true" />
+          </CentreButton>
+        </div>
+      )}
+
+      {/* Double-tap seek feedback */}
+      {seekFlash && (
+        <div
+          key={seekFlash.key}
+          aria-hidden="true"
+          className={cn("pointer-events-none absolute inset-y-0 flex w-1/3 items-center justify-center", seekFlash.side === "left" ? "left-0" : "right-0")}
+        >
+          <span className="jelly-panel flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold">
+            {seekFlash.side === "left" ? <RotateCcw className="size-4" aria-hidden="true" /> : <RotateCw className="size-4" aria-hidden="true" />}
+            {seekFlash.side === "left" ? "−" : "+"}
+            {seekFlash.amount}s
+          </span>
+        </div>
       )}
 
       {/* Error */}
@@ -591,21 +729,58 @@ function Player({ item }: { item: BaseItemDto }) {
         </div>
       )}
 
-      {/* Top bar */}
+      {/* Top bar. With native controls: just Back and the controls switch, always shown. */}
       <div
         className={cn(
-          "absolute inset-x-0 top-0 flex items-center gap-4 bg-linear-to-b from-black/80 to-black/0 px-4 pt-4 pb-10 transition-opacity duration-300 sm:px-8",
-          controlsShown ? "opacity-100" : "pointer-events-none opacity-0",
+          "absolute inset-x-0 top-0 flex items-center gap-4 px-4 pt-4 transition-opacity duration-300 sm:px-8",
+          native ? "pointer-events-none [&>*]:pointer-events-auto" : "bg-linear-to-b from-black/80 to-black/0 pb-10",
+          native || controlsShown ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
         <button type="button" onClick={back} aria-label="Back" className="jelly-control jelly-backdrop flex size-11 shrink-0 items-center justify-center rounded-full text-text">
           <ArrowLeft className="size-5" aria-hidden="true" />
         </button>
-        <div className="min-w-0">
+        <div className={cn("min-w-0 flex-1", native && "invisible")}>
           <h1 className="truncate font-display text-xl font-bold tracking-tight sm:text-2xl">{title}</h1>
           {subtitle && <p className="truncate text-sm text-text-secondary">{subtitle}</p>}
         </div>
+        {/* Native controls hide our bottom bar, so Settings lives up here then. */}
+        {native && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMenu(menu === "settings" ? "none" : "settings")}
+              aria-label="Settings"
+              aria-expanded={menu === "settings"}
+              className="jelly-control jelly-backdrop flex size-11 shrink-0 items-center justify-center rounded-full text-text"
+            >
+              <Settings className="size-5" aria-hidden="true" />
+            </button>
+            {menu === "settings" && (
+              <SettingsMenu
+                place={"top-full mt-3"}
+                maxBitrate={maxBitrate}
+                onQuality={changeQuality}
+                native={native}
+                speed={speed}
+                onSpeed={setSpeed}
+                subSize={prefs.subtitleSize}
+                onSubSize={(v) => updatePrefs({ subtitleSize: v })}
+                subStyle={prefs.subtitleStyle}
+                onSubStyle={(v) => updatePrefs({ subtitleStyle: v })}
+                subOffset={subOffset}
+                onSubOffset={setSubOffset}
+                hasTextSubs={!!source?.textTrack}
+                onToggleNative={() => {
+                  updatePrefs({ nativeControls: !native });
+                  setMenu("none");
+                }}
+              />
+            )}
+          </div>
+        )}
       </div>
+      {native && menu === "settings" && <button type="button" aria-label="Close settings" tabIndex={-1} onClick={() => setMenu("none")} className="fixed inset-0 z-0 cursor-default" />}
 
       {/* Keyboard feedback (↑ / ↓ volume, c subtitles) */}
       {osd && (
@@ -673,20 +848,22 @@ function Player({ item }: { item: BaseItemDto }) {
 
       {/* Bottom controls */}
       <div
+        hidden={native}
         className={cn(
           "absolute inset-x-0 bottom-0 bg-linear-to-t from-black/85 to-black/0 px-4 pt-16 pb-4 transition-opacity duration-300 sm:px-8 sm:pb-6",
           controlsShown ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >
-        <SeekBar time={time} duration={duration} pct={pct} bufPct={bufPct} onSeek={seekTo} />
+        <SeekBar time={time} duration={duration} pct={pct} bufPct={bufPct} onSeek={seekTo} preview={preview} chapters={chapters} />
         <div className="mt-2 flex items-center gap-1 sm:gap-2">
-          <CtrlButton label={playing ? "Pause (space)" : "Play (space)"} onClick={togglePlay}>
+          {/* On touch screens these live in the centre cluster instead. */}
+          <CtrlButton label={playing ? "Pause (space)" : "Play (space)"} onClick={togglePlay} className="pointer-coarse:hidden">
             {playing ? <Pause className="size-6 fill-current" aria-hidden="true" /> : <Play className="size-6 fill-current" aria-hidden="true" />}
           </CtrlButton>
-          <CtrlButton label="Back 10 seconds (←)" onClick={() => seekBy(-10)}>
+          <CtrlButton label="Back 10 seconds (←)" onClick={() => seekBy(-10)} className="pointer-coarse:hidden">
             <RotateCcw className="size-5" aria-hidden="true" />
           </CtrlButton>
-          <CtrlButton label="Forward 10 seconds (→)" onClick={() => seekBy(10)}>
+          <CtrlButton label="Forward 10 seconds (→)" onClick={() => seekBy(10)} className="pointer-coarse:hidden">
             <RotateCw className="size-5" aria-hidden="true" />
           </CtrlButton>
           <div className="group flex items-center">
@@ -714,7 +891,7 @@ function Player({ item }: { item: BaseItemDto }) {
               className="jelly-range hidden h-4 w-24 cursor-pointer appearance-none bg-transparent sm:block"
             />
           </div>
-          <span className="ml-2 text-sm text-text-secondary tabular-nums">
+          <span className="ml-1 text-xs whitespace-nowrap text-text-secondary tabular-nums sm:ml-2 sm:text-sm">
             {formatClock(time)} <span className="text-muted">/ {formatClock(duration)}</span>
           </span>
           <span className="flex-1" />
@@ -734,23 +911,51 @@ function Player({ item }: { item: BaseItemDto }) {
             </CtrlButton>
             {menu === "tracks" && <TracksMenu item={item} choice={choice} onChange={changeTracks} />}
           </div>
+          {chapters.length > 1 && (
+            <div className="relative">
+              <CtrlButton label="Chapters" active={menu === "chapters"} onClick={() => setMenu(menu === "chapters" ? "none" : "chapters")}>
+                <ListOrdered className="size-5" aria-hidden="true" />
+              </CtrlButton>
+              {menu === "chapters" && (
+                <ChaptersMenu
+                  chapters={chapters}
+                  time={time}
+                  onPick={(t) => {
+                    seekTo(t);
+                    setMenu("none");
+                  }}
+                />
+              )}
+            </div>
+          )}
           <div className="relative">
-            <CtrlButton label="Quality" active={menu === "quality"} onClick={() => setMenu(menu === "quality" ? "none" : "quality")}>
-              <Gauge className="size-5" aria-hidden="true" />
+            <CtrlButton label="Settings" active={menu === "settings"} onClick={() => setMenu(menu === "settings" ? "none" : "settings")}>
+              <Settings className="size-5" aria-hidden="true" />
             </CtrlButton>
-            {menu === "quality" && (
-              <div role="menu" aria-label="Quality" className="jelly-panel absolute right-0 bottom-full mb-3 w-56 rounded-panel p-1.5">
-                {QUALITY_OPTIONS.map((q) => (
-                  <button key={q.label} type="button" role="menuitemradio" aria-checked={maxBitrate === q.value} onClick={() => changeQuality(q.value)} className={menuRow}>
-                    <span className="flex-1">{q.label}</span>
-                    {maxBitrate === q.value && <Check className="size-4 text-accent" aria-hidden="true" />}
-                  </button>
-                ))}
-              </div>
+            {menu === "settings" && (
+              <SettingsMenu
+                place={"bottom-full mb-3"}
+                maxBitrate={maxBitrate}
+                onQuality={changeQuality}
+                native={native}
+                speed={speed}
+                onSpeed={setSpeed}
+                subSize={prefs.subtitleSize}
+                onSubSize={(v) => updatePrefs({ subtitleSize: v })}
+                subStyle={prefs.subtitleStyle}
+                onSubStyle={(v) => updatePrefs({ subtitleStyle: v })}
+                subOffset={subOffset}
+                onSubOffset={setSubOffset}
+                hasTextSubs={!!source?.textTrack}
+                onToggleNative={() => {
+                  updatePrefs({ nativeControls: !native });
+                  setMenu("none");
+                }}
+              />
             )}
           </div>
           {typeof document !== "undefined" && document.pictureInPictureEnabled && (
-            <CtrlButton label="Picture in picture" onClick={() => void togglePip()}>
+            <CtrlButton label="Picture in picture" onClick={() => void togglePip()} className="hidden sm:inline-flex">
               <PictureInPicture2 className="size-5" aria-hidden="true" />
             </CtrlButton>
           )}
@@ -766,7 +971,163 @@ function Player({ item }: { item: BaseItemDto }) {
 const menuRow =
   "flex w-full items-center gap-3 rounded-card px-3 py-2 text-left text-sm text-text-secondary transition hover:bg-overlay hover:text-text focus-visible:bg-overlay focus-visible:outline-none";
 
-function CtrlButton({ label, onClick, active, children }: { label: string; onClick: () => void; active?: boolean; children: React.ReactNode }) {
+/** The chapter playing at `t`. */
+function chapterAt(chapters: { start: number; name: string }[], t: number) {
+  let found = chapters[0];
+  for (const c of chapters) if (c.start <= t) found = c;
+  return found;
+}
+
+/** Shift a text track's cues by `offset` seconds, from their original times (remembered per cue). */
+const cueOriginals = new WeakMap<TextTrackCue, { start: number; end: number }>();
+function shiftCues(track: TextTrack, offset: number) {
+  for (const cue of Array.from(track.cues ?? [])) {
+    let o = cueOriginals.get(cue);
+    if (!o) {
+      o = { start: cue.startTime, end: cue.endTime };
+      cueOriginals.set(cue, o);
+    }
+    cue.startTime = Math.max(0, o.start + offset);
+    cue.endTime = Math.max(0, o.end + offset);
+  }
+}
+
+function ChaptersMenu({ chapters, time, onPick }: { chapters: { start: number; name: string }[]; time: number; onPick: (t: number) => void }) {
+  const current = chapterAt(chapters, time);
+  return (
+    <div role="menu" aria-label="Chapters" className="jelly-panel absolute right-0 bottom-full mb-3 max-h-[min(60vh,28rem)] w-72 overflow-y-auto rounded-panel p-1.5">
+      <p className="px-3 pt-1.5 pb-1 text-xs font-semibold tracking-wider text-muted uppercase">Chapters</p>
+      {chapters.map((c) => (
+        <button key={c.start} type="button" role="menuitemradio" aria-checked={c === current} onClick={() => onPick(c.start)} className={menuRow}>
+          <span className={cn("flex-1 truncate", c === current && "font-semibold text-accent")}>{c.name}</span>
+          <span className="shrink-0 text-xs text-muted tabular-nums">{formatClock(c.start)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** ⚙ menu: quality, and the native-controls switch. `place` positions it above/below its button. */
+function SettingsMenu({
+  place,
+  maxBitrate,
+  onQuality,
+  native,
+  onToggleNative,
+  speed,
+  onSpeed,
+  subSize,
+  onSubSize,
+  subStyle,
+  onSubStyle,
+  subOffset,
+  onSubOffset,
+  hasTextSubs,
+}: {
+  place: string;
+  maxBitrate: number | null;
+  onQuality: (value: number | null) => void;
+  native: boolean;
+  onToggleNative: () => void;
+  speed: number;
+  onSpeed: (v: number) => void;
+  subSize: SubtitleSize;
+  onSubSize: (v: SubtitleSize) => void;
+  subStyle: SubtitleStyle;
+  onSubStyle: (v: SubtitleStyle) => void;
+  subOffset: number;
+  onSubOffset: (v: number) => void;
+  hasTextSubs: boolean;
+}) {
+  const seg = (active: boolean) => cn("h-8 flex-1 rounded-full text-xs font-semibold transition", active ? "bg-text text-bg" : "text-text-secondary hover:bg-overlay hover:text-text");
+  const label = "px-3 pt-2 pb-1.5 text-xs font-semibold tracking-wider text-muted uppercase";
+  return (
+    <div role="menu" aria-label="Settings" className={cn("jelly-panel absolute right-0 z-10 max-h-[min(72vh,36rem)] w-72 overflow-y-auto rounded-panel p-1.5", place)}>
+      <p className={label}>Speed</p>
+      <div role="group" aria-label="Playback speed" className="flex gap-1 px-2 pb-1">
+        {PLAYBACK_SPEEDS.map((v) => (
+          <button key={v} type="button" aria-pressed={speed === v} onClick={() => onSpeed(v)} className={seg(speed === v)}>
+            {v === 1 ? "1×" : `${v}`}
+          </button>
+        ))}
+      </div>
+      <div role="separator" className="my-1 h-px bg-hairline" />
+      <p className={label}>Subtitles</p>
+      <div className="space-y-2 px-2 pb-1">
+        <div role="group" aria-label="Subtitle size" className="flex items-center gap-1">
+          <span className="w-20 shrink-0 text-xs text-text-secondary">Size</span>
+          {SUBTITLE_SIZES.map((sz) => (
+            <button key={sz.value} type="button" aria-pressed={subSize === sz.value} aria-label={`Subtitle size ${sz.value}`} onClick={() => onSubSize(sz.value)} className={seg(subSize === sz.value)}>
+              {sz.label}
+            </button>
+          ))}
+        </div>
+        <div role="group" aria-label="Subtitle background" className="flex items-center gap-1">
+          <span className="w-20 shrink-0 text-xs text-text-secondary">Background</span>
+          <button type="button" aria-pressed={subStyle === "box"} onClick={() => onSubStyle("box")} className={seg(subStyle === "box")}>
+            Box
+          </button>
+          <button type="button" aria-pressed={subStyle === "shadow"} onClick={() => onSubStyle("shadow")} className={seg(subStyle === "shadow")}>
+            Shadow
+          </button>
+        </div>
+        <div role="group" aria-label="Subtitle timing" className={cn("flex items-center gap-1", !hasTextSubs && "opacity-50")}>
+          <span className="w-20 shrink-0 text-xs text-text-secondary">Timing</span>
+          <button type="button" disabled={!hasTextSubs} aria-label="Subtitles earlier by half a second" onClick={() => onSubOffset(Math.round((subOffset - 0.5) * 10) / 10)} className={seg(false)}>
+            −0.5s
+          </button>
+          <button type="button" disabled={!hasTextSubs || subOffset === 0} onClick={() => onSubOffset(0)} className={cn(seg(false), "tabular-nums")} aria-label="Reset subtitle timing">
+            {subOffset > 0 ? "+" : ""}
+            {subOffset.toFixed(1)}s
+          </button>
+          <button type="button" disabled={!hasTextSubs} aria-label="Subtitles later by half a second" onClick={() => onSubOffset(Math.round((subOffset + 0.5) * 10) / 10)} className={seg(false)}>
+            +0.5s
+          </button>
+        </div>
+      </div>
+      <div role="separator" className="my-1 h-px bg-hairline" />
+      <p className={label}>Quality</p>
+      {QUALITY_OPTIONS.map((q) => (
+        <button key={q.label} type="button" role="menuitemradio" aria-checked={maxBitrate === q.value} onClick={() => onQuality(q.value)} className={menuRow}>
+          <span className="flex-1">{q.label}</span>
+          {maxBitrate === q.value && <Check className="size-4 text-accent" aria-hidden="true" />}
+        </button>
+      ))}
+      <div role="separator" className="my-1 h-px bg-hairline" />
+      <p className="px-3 pt-1.5 pb-1 text-xs font-semibold tracking-wider text-muted uppercase">Player</p>
+      <button type="button" role="menuitemcheckbox" aria-checked={native} onClick={onToggleNative} className={menuRow}>
+        <MonitorPlay className="size-4 shrink-0 text-text-secondary" aria-hidden="true" />
+        <span className="flex-1">
+          Native player controls
+          <span className="block text-xs text-muted">Use your device&apos;s own video controls</span>
+        </span>
+        <span aria-hidden="true" className={cn("relative h-5 w-9 shrink-0 rounded-full transition", native ? "bg-accent" : "bg-overlay-strong")}>
+          <span className={cn("absolute top-0.5 size-4 rounded-full bg-text transition-all", native ? "left-[1.125rem]" : "left-0.5")} />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+/** Big round control in the touch centre cluster. */
+function CentreButton({ label, onClick, shown, className, children }: { label: string; onClick: () => void; shown: boolean; className?: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      tabIndex={shown ? 0 : -1}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn("jelly-control jelly-backdrop flex items-center justify-center rounded-full text-text active:scale-95", shown && "pointer-events-auto", className)}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CtrlButton({ label, onClick, active, className, children }: { label: string; onClick: () => void; active?: boolean; className?: string; children: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -779,30 +1140,127 @@ function CtrlButton({ label, onClick, active, children }: { label: string; onCli
         // re-press it instead of play/pause. Keyboard activation keeps focus.
         if (e.detail > 0) e.currentTarget.blur();
       }}
-      className={cn("inline-flex size-11 shrink-0 items-center justify-center rounded-full text-text transition hover:bg-overlay-strong", active && "bg-overlay-strong text-accent")}
+      className={cn("inline-flex size-11 shrink-0 items-center justify-center rounded-full text-text transition hover:bg-overlay-strong", active && "bg-overlay-strong text-accent", className)}
     >
       {children}
     </button>
   );
 }
 
-function SeekBar({ time, duration, pct, bufPct, onSeek }: { time: number; duration: number; pct: number; bufPct: number; onSeek: (t: number) => void }) {
-  const [hover, setHover] = useState<number | null>(null);
+interface TrickplayPreview {
+  /** Tile image URL for a tile index. */
+  tileUrl: (tile: number) => string;
+  /** One thumbnail's size in px, grid size, count and spacing (ms). */
+  width: number;
+  height: number;
+  cols: number;
+  rows: number;
+  count: number;
+  interval: number;
+}
+
+/** Display width of the hover thumbnail. */
+const PREVIEW_WIDTH = 240;
+
+/**
+ * Jellyfin trickplay: per media source, per thumbnail width, a set of tile
+ * images (`/Videos/{id}/Trickplay/{width}/{tile}.jpg`), each a cols×rows grid
+ * of thumbnails taken every `Interval` ms. Picks the smallest width ≥ 240px.
+ */
+function trickplayFor(item: BaseItemDto, mediaSourceId: string | undefined): TrickplayPreview | null {
+  const all = item.Trickplay;
+  if (!all || !item.Id) return null;
+  const byWidth = (mediaSourceId && all[mediaSourceId]) || Object.values(all)[0];
+  if (!byWidth) return null;
+  const widths = Object.keys(byWidth).map(Number).filter(Boolean).sort((a, b) => a - b);
+  const w = widths.find((x) => x >= PREVIEW_WIDTH) ?? widths.at(-1);
+  const info = w ? byWidth[String(w)] : undefined;
+  if (!w || !info?.Width || !info.Height || !info.TileWidth || !info.TileHeight || !info.ThumbnailCount || !info.Interval) return null;
+  const id = item.Id;
+  const msid = mediaSourceId ?? Object.keys(all)[0];
+  return {
+    tileUrl: (tile) => jfUrl(`/Videos/${id}/Trickplay/${w}/${tile}.jpg`, { mediaSourceId: msid }),
+    width: info.Width,
+    height: info.Height,
+    cols: info.TileWidth,
+    rows: info.TileHeight,
+    count: info.ThumbnailCount,
+    interval: info.Interval,
+  };
+}
+
+/** The thumbnail for a time, cut out of its tile with background-position. */
+function PreviewThumb({ preview, seconds }: { preview: TrickplayPreview; seconds: number }) {
+  const n = Math.min(preview.count - 1, Math.max(0, Math.floor((seconds * 1000) / preview.interval)));
+  const perTile = preview.cols * preview.rows;
+  const tile = Math.floor(n / perTile);
+  const local = n % perTile;
+  const scale = PREVIEW_WIDTH / preview.width;
+  const w = PREVIEW_WIDTH;
+  const h = Math.round(preview.height * scale);
+  return (
+    <span
+      className="block rounded-[10px] bg-black bg-no-repeat ring-1 ring-white/20"
+      style={{
+        width: w,
+        height: h,
+        backgroundImage: `url("${preview.tileUrl(tile)}")`,
+        backgroundSize: `${preview.cols * w}px ${preview.rows * h}px`,
+        backgroundPosition: `${-(local % preview.cols) * w}px ${-Math.floor(local / preview.cols) * h}px`,
+      }}
+    />
+  );
+}
+
+function SeekBar({
+  time,
+  duration,
+  pct,
+  bufPct,
+  onSeek,
+  preview,
+  chapters,
+}: {
+  time: number;
+  duration: number;
+  pct: number;
+  bufPct: number;
+  onSeek: (t: number) => void;
+  preview: TrickplayPreview | null;
+  chapters: { start: number; name: string }[];
+}) {
+  const [hover, setHover] = useState<{ frac: number; barWidth: number } | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
+  // While dragging, preview the drag position; otherwise the hovered one.
+  const frac = drag !== null && duration > 0 ? drag / duration : hover?.frac ?? null;
+  const barWidth = hover?.barWidth ?? 0;
+  // Keep the bubble inside the bar's ends.
+  const half = (preview ? PREVIEW_WIDTH : 48) / 2;
+  const left = frac !== null && barWidth ? Math.min(barWidth - half, Math.max(half, frac * barWidth)) : null;
   return (
     <div
       className="relative flex items-center"
       onPointerMove={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
-        setHover(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
+        setHover({ frac: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), barWidth: r.width });
       }}
       onPointerLeave={() => setHover(null)}
     >
-      {hover !== null && duration > 0 && (
-        <span aria-hidden="true" className="jelly-panel pointer-events-none absolute bottom-full mb-2 -translate-x-1/2 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums" style={{ left: `${hover * 100}%` }}>
-          {formatClock(hover * duration)}
+      {frac !== null && left !== null && duration > 0 && (
+        <span aria-hidden="true" className="pointer-events-none absolute bottom-full mb-3 flex -translate-x-1/2 flex-col items-center gap-1.5" style={{ left }}>
+          {preview && <PreviewThumb preview={preview} seconds={frac * duration} />}
+          <span className="jelly-panel max-w-60 truncate rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums">
+            {formatClock(frac * duration)}
+            {chapters.length > 1 && <span className="font-normal text-text-secondary"> · {chapterAt(chapters, frac * duration)?.name}</span>}
+          </span>
         </span>
       )}
+      {/* Chapter ticks */}
+      {duration > 0 &&
+        chapters.length > 1 &&
+        chapters.slice(1).map((c) => (
+          <span key={c.start} aria-hidden="true" className="pointer-events-none absolute top-1/2 z-10 h-[7px] w-0.5 -translate-y-1/2 bg-black/70" style={{ left: `${(c.start / duration) * 100}%` }} />
+        ))}
       <input
         type="range"
         min={0}

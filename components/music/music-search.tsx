@@ -175,7 +175,7 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
 
   return (
     <div className="space-y-10 pt-2">
-      <div className={`grid gap-6 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] ${PAD}`}>
+      <div className={`grid grid-cols-[minmax(0,1fr)] gap-6 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] ${PAD}`}>
         <section aria-labelledby="music-top" className="space-y-3">
           <h2 id="music-top" className="font-display text-xl font-bold tracking-tight sm:text-[22px]">
             Top result

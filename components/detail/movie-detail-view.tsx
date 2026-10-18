@@ -15,6 +15,7 @@ import { useNow } from "@/lib/use-now";
 import { DetailError, DetailHero, DetailNotFound, DetailSkeleton } from "./detail-hero";
 import { InfoPanel, peopleRows, streamRows, streamsOf } from "./info-panel";
 import { CastRow, CollectionGrid, MoreLikeThis } from "./rows";
+import { ExtrasRow, MediaInfo, TrailerButton } from "./extras";
 
 /** Item types that have their own detail route; /item/<id> forwards to it. */
 function forwardHref(item: BaseItemDto): string | null {
@@ -62,10 +63,11 @@ function MovieDetail({ item }: { item: BaseItemDto }) {
     <div className="pb-20">
       <DetailHero
         item={item}
-        meta={[runtime, endsAt]}
+        meta={[runtime, { node: endsAt, hideOnPhone: true }]}
         actions={
           <>
             <PlayButton href={watchHref(id)} label={inProgress ? (left ? `Resume · ${left}` : "Resume") : "Play"} />
+            <TrailerButton item={item} />
             <WatchedToggle item={item} />
             <AddToListButton item={item} />
             <FavoriteButton item={item} />
@@ -74,8 +76,10 @@ function MovieDetail({ item }: { item: BaseItemDto }) {
         panel={<InfoPanel rows={rows} />}
       />
       <div className="mt-6 flex flex-col gap-12">
+        <ExtrasRow item={item} />
         <CastRow people={item.People ?? []} />
         <MoreLikeThis itemId={id} />
+        <MediaInfo item={item} className="mx-4 sm:mx-8 lg:mx-11" />
       </div>
     </div>
   );

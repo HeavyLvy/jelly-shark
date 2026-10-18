@@ -30,8 +30,8 @@ export const POSTER_GRID_MIN = Math.round(POSTER_WIDTH * 0.92);
  * resulting poster width is closest to POSTER_WIDTH (min 2), so posters stay
  * within a few percent of the target at any screen size.
  */
-export function posterColumns(width: number, gap: number): number {
-  return Math.max(2, Math.round((width + gap) / (POSTER_WIDTH + gap)));
+export function posterColumns(width: number, gap: number, posterWidth = POSTER_WIDTH): number {
+  return Math.max(2, Math.round((width + gap) / (posterWidth + gap)));
 }
 
 /** `sizes` for fixed-width poster cards (rows). */

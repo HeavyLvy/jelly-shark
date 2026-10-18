@@ -1,44 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, GripVertical, Trash2, X } from "lucide-react";
+import { useEffect, useRef, type CSSProperties, type PointerEvent } from "react";
+import { GripVertical, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { formatRuntime } from "@/lib/format";
 import { usePlayer, type QueueItem } from "@/lib/player/store";
+import { useDragReorder, type DragState } from "@/lib/use-drag-reorder";
 import { TrackArt } from "./track-bits";
 
-function Row({ item, index, isCurrent, total, dragIndex, setDragIndex }: { item: QueueItem; index: number; isCurrent: boolean; total: number; dragIndex: number | null; setDragIndex: (i: number | null) => void }) {
+function Row({
+  item,
+  index,
+  isCurrent,
+  total,
+  drag,
+  onGrab,
+  rowStyle,
+}: {
+  item: QueueItem;
+  index: number;
+  isCurrent: boolean;
+  total: number;
+  drag: DragState | null;
+  onGrab: (e: PointerEvent<HTMLElement>, index: number) => void;
+  rowStyle: (index: number) => CSSProperties | undefined;
+}) {
   const { jumpTo, removeAt, move } = usePlayer.getState();
-  const [over, setOver] = useState(false);
+  const dragging = drag?.from === index;
   return (
     <li
-      draggable
-      onDragStart={(e) => {
-        setDragIndex(index);
-        e.dataTransfer.effectAllowed = "move";
-      }}
-      onDragEnd={() => setDragIndex(null)}
-      onDragOver={(e) => {
-        if (dragIndex === null) return;
-        e.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        if (dragIndex !== null) move(dragIndex, index);
-        setDragIndex(null);
-      }}
+      data-reorder-index={index}
+      style={rowStyle(index)}
       className={cn(
-        "group flex items-center gap-2 rounded-card py-1.5 pr-1 pl-1 transition",
-        isCurrent ? "bg-overlay-strong" : "hover:bg-overlay",
-        over && "ring-1 ring-accent ring-inset",
-        dragIndex === index && "opacity-40",
+        "group relative flex items-center gap-2 rounded-card py-1.5 pr-1 pl-1",
+        dragging ? "z-10 bg-surface-raised shadow-xl shadow-black/40" : "transition-[transform,background-color] duration-150",
+        !dragging && (isCurrent ? "bg-overlay-strong" : "hover:bg-overlay"),
       )}
     >
-      <GripVertical className="size-4 shrink-0 cursor-grab text-muted opacity-0 group-hover:opacity-100" aria-hidden="true" />
       <button type="button" onClick={() => jumpTo(index)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-current={isCurrent ? "true" : undefined}>
         <TrackArt item={item} size={40} className="size-10" />
         <span className="min-w-0">
@@ -47,17 +46,32 @@ function Row({ item, index, isCurrent, total, dragIndex, setDragIndex }: { item:
         </span>
       </button>
       <span className="hidden text-xs text-muted tabular-nums sm:inline">{formatRuntime(item.RunTimeTicks)}</span>
-      <div className="flex opacity-100 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
-        <button type="button" aria-label={`Move ${item.Name} up`} disabled={index === 0} onClick={() => move(index, index - 1)} className="inline-flex size-7 items-center justify-center rounded-full text-muted hover:text-text disabled:opacity-30">
-          <ChevronUp className="size-4" aria-hidden="true" />
-        </button>
-        <button type="button" aria-label={`Move ${item.Name} down`} disabled={index === total - 1} onClick={() => move(index, index + 1)} className="inline-flex size-7 items-center justify-center rounded-full text-muted hover:text-text disabled:opacity-30">
-          <ChevronDown className="size-4" aria-hidden="true" />
-        </button>
-        <button type="button" aria-label={`Remove ${item.Name} from queue`} onClick={() => removeAt(index)} className="inline-flex size-7 items-center justify-center rounded-full text-muted hover:text-danger">
-          <X className="size-4" aria-hidden="true" />
-        </button>
-      </div>
+      <button
+        type="button"
+        aria-label={`Remove ${item.Name} from queue`}
+        onClick={() => removeAt(index)}
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted hover:text-danger sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
+      >
+        <X className="size-4" aria-hidden="true" />
+      </button>
+      {/* Drag handle (touch + mouse). Keyboard: ↑/↓ move the song. touch-none so dragging doesn't scroll. */}
+      <button
+        type="button"
+        aria-label={`Reorder ${item.Name} (drag, or use the arrow keys)`}
+        onPointerDown={(e) => onGrab(e, index)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp" && index > 0) {
+            e.preventDefault();
+            move(index, index - 1);
+          } else if (e.key === "ArrowDown" && index < total - 1) {
+            e.preventDefault();
+            move(index, index + 1);
+          }
+        }}
+        className="inline-flex size-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-full text-muted hover:text-text active:cursor-grabbing"
+      >
+        <GripVertical className="size-5" aria-hidden="true" />
+      </button>
     </li>
   );
 }
@@ -68,8 +82,9 @@ export function QueuePanel() {
   const index = usePlayer((s) => s.index);
   const source = usePlayer((s) => s.source);
   const { setPanel, clearQueue } = usePlayer.getState();
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const { drag, onGrab, rowStyle } = useDragReorder(scrollerRef, (from, to) => usePlayer.getState().move(from, to));
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -95,12 +110,12 @@ export function QueuePanel() {
           </button>
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div ref={scrollerRef} className={cn("min-h-0 flex-1 overflow-y-auto pr-1", drag && "select-none")}>
         {current && (
           <>
             <p className="px-1 pb-1 text-xs font-semibold tracking-wider text-muted uppercase">Now playing{source ? ` · from ${source.label}` : ""}</p>
             <ul>
-              <Row item={current} index={index} isCurrent total={queue.length} dragIndex={dragIndex} setDragIndex={setDragIndex} />
+              <Row item={current} index={index} isCurrent total={queue.length} drag={drag} onGrab={onGrab} rowStyle={rowStyle} />
             </ul>
           </>
         )}
@@ -110,7 +125,7 @@ export function QueuePanel() {
         ) : (
           <ul>
             {queue.slice(index + 1).map((item, k) => (
-              <Row key={item.uid} item={item} index={index + 1 + k} isCurrent={false} total={queue.length} dragIndex={dragIndex} setDragIndex={setDragIndex} />
+              <Row key={item.uid} item={item} index={index + 1 + k} isCurrent={false} total={queue.length} drag={drag} onGrab={onGrab} rowStyle={rowStyle} />
             ))}
           </ul>
         )}
@@ -119,7 +134,7 @@ export function QueuePanel() {
             <summary className="cursor-pointer text-xs font-semibold tracking-wider text-muted uppercase">Previously played ({index})</summary>
             <ul className="mt-1">
               {queue.slice(0, index).map((item, k) => (
-                <Row key={item.uid} item={item} index={k} isCurrent={false} total={queue.length} dragIndex={dragIndex} setDragIndex={setDragIndex} />
+                <Row key={item.uid} item={item} index={k} isCurrent={false} total={queue.length} drag={drag} onGrab={onGrab} rowStyle={rowStyle} />
               ))}
             </ul>
           </details>

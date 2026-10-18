@@ -7,10 +7,11 @@ import { AxiosError } from "axios";
 import { AlbumCardSkeleton } from "@/components/media/cards";
 import { MediaRow, RowItem } from "@/components/media/media-row";
 import { LikeButton } from "@/components/player/track-bits";
-import { Button } from "@/components/ui/button";
+import { Radio } from "lucide-react";
+import { Button, IconButton } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useItem } from "@/lib/queries/items";
-import { fetchArtistTracks, useArtistAlbums, useArtistTopTracks, useSimilarArtists } from "@/lib/queries/music";
+import { fetchArtistTracks, fetchRadio, useArtistAlbums, useArtistTopTracks, useSimilarArtists } from "@/lib/queries/music";
 import { usePlayer } from "@/lib/player/store";
 import { ArtistCardSkeleton, MusicAlbumCard, MusicArtistCard } from "./music-cards";
 import { MusicHeader, MusicHeaderSkeleton } from "./music-header";
@@ -70,7 +71,31 @@ export function ArtistView() {
         playDisabled={busy}
         onPlay={() => void playAll(false)}
         onShuffle={() => void playAll(true)}
-        actions={<LikeButton item={a} className="size-12" />}
+        actions={
+          <>
+            <IconButton
+              aria-label={`${a.Name ?? "Artist"} radio`}
+              title="Artist radio"
+              variant="ghost"
+              size="lg"
+              disabled={busy}
+              onClick={() =>
+                void (async () => {
+                  setBusy(true);
+                  try {
+                    const mix = await fetchRadio(a);
+                    if (mix.length) playItems(mix, 0, { label: `${a.Name ?? "Artist"} radio`, href: source.href });
+                  } finally {
+                    setBusy(false);
+                  }
+                })()
+              }
+            >
+              <Radio className="size-5" aria-hidden="true" />
+            </IconButton>
+            <LikeButton item={a} className="size-12" />
+          </>
+        }
       />
       <section aria-label="Popular" className="px-3 sm:px-5">
         <h2 className="mb-3 px-2 font-display text-xl font-bold tracking-tight sm:text-[22px]">Popular</h2>

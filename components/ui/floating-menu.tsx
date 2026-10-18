@@ -120,3 +120,7 @@ export function useContextMenu() {
   }, []);
   return { anchor, onContextMenu, close };
 }
+
+/** Row style shared by every menu (music, media, …). */
+export const menuItemCls =
+  "flex w-full items-center gap-3 rounded-card px-3 py-2 text-left text-sm text-text-secondary transition hover:bg-overlay hover:text-text focus-visible:bg-overlay focus-visible:text-text focus-visible:outline-none disabled:opacity-50";

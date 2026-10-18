@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import type { BaseItemDto, BaseItemPerson, MediaStream } from "@jellyfin/sdk/lib/generated-client/models";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { Skeleton } from "@/components/ui/states";
 import { dotJoin } from "@/lib/format";
@@ -141,12 +145,23 @@ export function streamRows(streams: MediaStream[]): InfoRow[] {
 /* ---------- panel ---------- */
 
 /** Floating details card on the right of the hero (stacks under it on phones). */
+/** Facts card beside the hero. Below lg it collapses to a "Details" row you can open. */
 export function InfoPanel({ rows, pendingRows = 0, className }: { rows: InfoRow[]; pendingRows?: number; className?: string }) {
+  const [open, setOpen] = useState(false);
   if (rows.length === 0 && pendingRows === 0) return null;
   return (
-    <div className={cn("jelly-panel rounded-panel p-5", className)}>
+    <div className={cn("jelly-panel rounded-panel p-5 max-lg:p-0", className)}>
       <h2 className="sr-only">Details</h2>
-      <dl className="grid grid-cols-[6.5rem_1fr] gap-x-4 gap-y-2.5 text-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between px-5 py-3.5 text-sm font-semibold text-text lg:hidden"
+      >
+        Details
+        <ChevronDown className={cn("size-4 text-text-secondary transition", open && "rotate-180")} aria-hidden="true" />
+      </button>
+      <dl className={cn("grid grid-cols-[6.5rem_1fr] gap-x-4 gap-y-2.5 text-sm max-lg:px-5 max-lg:pb-5", !open && "max-lg:hidden")}>
         {rows.map((r) => (
           <div key={r.label} className="contents">
             <dt className="text-muted">{r.label}</dt>

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
-import { ChevronDown, ChevronUp, Clock3, Pause, Play } from "lucide-react";
+import { Clock3, GripVertical, Pause, Play } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { Skeleton } from "@/components/ui/states";
 import { formatClock, ticksToSeconds } from "@/lib/format";
 import { currentTrack, usePlayer, type PlaySource } from "@/lib/player/store";
 import { ArtistLinks, LikeButton, TrackArt } from "@/components/player/track-bits";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDragReorder } from "@/lib/use-drag-reorder";
 import { FloatingMenu, type MenuAnchor } from "@/components/ui/floating-menu";
 import { TrackMenu, TrackMenuBody } from "./track-menu";
 
@@ -53,9 +54,17 @@ export function TrackTable({ tracks, source, showAlbum, showArt = true, showPlay
   // One right-click menu for the whole table.
   const [ctx, setCtx] = useState<{ anchor: MenuAnchor; index: number } | null>(null);
   const ctxTrack = ctx ? tracks[ctx.index] : null;
+  // Drag-to-reorder (playlists): the page scroller is the music panel (or the document).
+  const tableRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    scrollerRef.current = tableRef.current?.closest<HTMLElement>("[data-scroll-root]") ?? (document.scrollingElement as HTMLElement | null);
+  }, []);
+  const { drag, onGrab, rowStyle } = useDragReorder(scrollerRef, (from, to) => onMove?.(tracks[from], to));
 
+  // Phones: just art + title/artist + ⋯ (tap the row to play), like Spotify's app.
   const cols = cn(
-    "grid items-center gap-3 px-3",
+    "grid items-center gap-3 px-3 max-sm:px-1",
     showAlbum
       ? showPlays
         ? "grid-cols-[2rem_minmax(0,1fr)_auto] md:grid-cols-[2rem_minmax(0,1.4fr)_minmax(0,1fr)_4.5rem_auto]"
@@ -63,11 +72,12 @@ export function TrackTable({ tracks, source, showAlbum, showArt = true, showPlay
       : showPlays
         ? "grid-cols-[2rem_minmax(0,1fr)_auto] md:grid-cols-[2rem_minmax(0,1fr)_4.5rem_auto]"
         : "grid-cols-[2rem_minmax(0,1fr)_auto]",
+    "max-sm:grid-cols-[minmax(0,1fr)_auto]",
   );
 
   return (
-    <div role="table" aria-label={`${source.label} tracks`} className={className}>
-      <div role="row" className={cn(cols, "h-9 border-b border-hairline text-xs font-semibold tracking-wide text-muted uppercase")}>
+    <div ref={tableRef} role="table" aria-label={`${source.label} tracks`} className={cn(className, drag && "select-none")}>
+      <div role="row" className={cn(cols, "h-9 border-b border-hairline text-xs font-semibold tracking-wide text-muted uppercase max-sm:hidden")}>
         <span role="columnheader" className="text-center">#</span>
         <span role="columnheader">Title</span>
         {showAlbum && <span role="columnheader" className="hidden md:block">Album</span>}
@@ -78,7 +88,7 @@ export function TrackTable({ tracks, source, showAlbum, showArt = true, showPlay
           <span className="flex w-11 justify-center">
             <Clock3 className="size-4" aria-label="Duration" />
           </span>
-          {onMove && <span className="hidden w-14 md:block" aria-hidden="true" />}
+          {onMove && <span className="size-8" aria-hidden="true" />}
           <span className="size-8" aria-hidden="true" />
         </span>
       </div>
@@ -91,6 +101,8 @@ export function TrackTable({ tracks, source, showAlbum, showArt = true, showPlay
             <div
               key={t.PlaylistItemId ?? `${t.Id}-${i}`}
               role="row"
+              data-reorder-index={onMove ? i : undefined}
+              style={onMove ? rowStyle(i) : undefined}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setCtx({ anchor: { x: e.clientX, y: e.clientY }, index: i });
@@ -100,9 +112,14 @@ export function TrackTable({ tracks, source, showAlbum, showArt = true, showPlay
                 if ((e.target as HTMLElement).closest("a, button, input")) return;
                 play();
               }}
-              className={cn(cols, "group h-14 cursor-pointer rounded-card transition hover:bg-overlay", isCurrent && "bg-overlay-strong hover:bg-overlay-strong")}
+              className={cn(
+                cols,
+                "group h-14 cursor-pointer rounded-card hover:bg-overlay",
+                drag?.from === i ? "relative z-10 bg-surface-raised shadow-xl shadow-black/40" : "transition-[transform,background-color] duration-150",
+                isCurrent && "bg-overlay-strong hover:bg-overlay-strong",
+              )}
             >
-              <span role="cell" className="relative flex justify-center text-sm text-muted tabular-nums">
+              <span role="cell" className="relative flex justify-center text-sm text-muted tabular-nums max-sm:hidden">
                 <span className={cn("group-hover:invisible group-focus-within:invisible", isCurrent && "invisible")}>{num}</span>
                 {isCurrent && (
                   <span className="absolute inset-0 flex items-center justify-center group-hover:invisible group-focus-within:invisible">
@@ -142,17 +159,27 @@ export function TrackTable({ tracks, source, showAlbum, showArt = true, showPlay
                 </span>
               )}
               <span role="cell" className="flex items-center justify-end gap-1">
-                <LikeButton item={t} size="sm" className="opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 aria-pressed:opacity-100" />
-                <span className="w-11 text-center text-sm text-muted tabular-nums">{formatClock(ticksToSeconds(t.RunTimeTicks))}</span>
+                <LikeButton item={t} size="sm" className="opacity-100 max-sm:hidden md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 aria-pressed:opacity-100" />
+                <span className="w-11 text-center text-sm text-muted tabular-nums max-sm:hidden">{formatClock(ticksToSeconds(t.RunTimeTicks))}</span>
                 {onMove && (
-                  <span className="hidden w-14 md:flex">
-                    <button type="button" aria-label={`Move ${t.Name} up`} disabled={i === 0} onClick={() => onMove(t, i - 1)} className="inline-flex size-7 items-center justify-center rounded-full text-muted opacity-0 hover:text-text group-hover:opacity-100 focus-visible:opacity-100 disabled:hidden">
-                      <ChevronUp className="size-4" aria-hidden="true" />
-                    </button>
-                    <button type="button" aria-label={`Move ${t.Name} down`} disabled={i === tracks.length - 1} onClick={() => onMove(t, i + 1)} className="inline-flex size-7 items-center justify-center rounded-full text-muted opacity-0 hover:text-text group-hover:opacity-100 focus-visible:opacity-100 disabled:hidden">
-                      <ChevronDown className="size-4" aria-hidden="true" />
-                    </button>
-                  </span>
+                  // Drag handle (touch + mouse); ↑/↓ on the keyboard. touch-none so dragging doesn't scroll.
+                  <button
+                    type="button"
+                    aria-label={`Reorder ${t.Name} (drag, or use the arrow keys)`}
+                    onPointerDown={(e) => onGrab(e, i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowUp" && i > 0) {
+                        e.preventDefault();
+                        onMove(t, i - 1);
+                      } else if (e.key === "ArrowDown" && i < tracks.length - 1) {
+                        e.preventDefault();
+                        onMove(t, i + 1);
+                      }
+                    }}
+                    className="inline-flex size-8 cursor-grab touch-none items-center justify-center rounded-full text-muted hover:text-text focus-visible:opacity-100 active:cursor-grabbing md:opacity-0 md:group-hover:opacity-100"
+                  >
+                    <GripVertical className="size-4" aria-hidden="true" />
+                  </button>
                 )}
                 <TrackMenu tracks={[t]} label={t.Name ?? "track"} onRemove={onRemove ? () => onRemove(t) : undefined} />
               </span>

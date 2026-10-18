@@ -3,6 +3,9 @@ import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { AudioEngine } from "@/components/player/audio-engine";
 import { uiCssVars } from "@/lib/ui-config";
+import { UiPrefsApplier } from "@/components/ui-prefs-applier";
+import { SettingsSync } from "@/components/settings-sync";
+import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import "./globals.css";
 
 const bricolage = Bricolage_Grotesque({
@@ -33,6 +36,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {children}
           {/* Persistent music engine: survives navigation between every route. */}
           <AudioEngine />
+          <UiPrefsApplier />
+          <SettingsSync />
+          <ShortcutsDialog />
         </Providers>
       </body>
     </html>

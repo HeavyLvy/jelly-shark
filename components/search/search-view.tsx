@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import { useDeferredValue, useRef, type FormEvent, type MouseEvent } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { Search, X } from "lucide-react";
 import { LandscapeCard, LandscapeCardSkeleton, PosterCard, PosterCardSkeleton } from "@/components/media/cards";
@@ -14,7 +14,7 @@ import { dotJoin } from "@/lib/format";
 import { isTitleMatch, pickTopResult, useBrowseGenres, useSearchGroup } from "@/lib/queries/search";
 import { useArtistAlbums, useArtistTopTracks } from "@/lib/queries/music";
 import { addRecentSearch } from "@/lib/recent-searches";
-import { useDebounced } from "@/lib/use-debounced";
+import { useUrlSearchQuery } from "@/lib/use-url-search-query";
 import { GenreTiles, RecentSearches, SongList, SongListSkeleton, TopResultCard, TopResultSkeleton } from "./search-bits";
 
 type Filter = "all" | "movies" | "tv" | "music";
@@ -32,23 +32,25 @@ function parseFilter(v: string | null): Filter {
 /** Global search (mockup 05). */
 export function SearchView() {
   const params = useSearchParams();
-  const [q, setQ] = useState(() => params.get("q") ?? "");
-  const [filter, setFilter] = useState<Filter>(() => parseFilter(params.get("type")));
-  const term = useDebounced(q.trim(), 300);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Keep ?q=&type= in the URL (shareable, survives reload) without a server round-trip.
-  useEffect(() => {
-    const p = new URLSearchParams();
-    if (term) p.set("q", term);
-    if (filter !== "all") p.set("type", filter);
+  // ?q= follows the input after a typing pause (shared with the Music search box);
+  // results search what the URL holds, rendered in the background while typing.
+  const { query: q, setQuery: setQ, flush, committed } = useUrlSearchQuery("/search");
+  const term = useDeferredValue(committed.trim());
+  // The filter lives in ?type= (shareable, survives reload, reset by the nav's Search link).
+  const filter = parseFilter(params.get("type"));
+  const setFilter = (next: Filter) => {
+    const p = new URLSearchParams(window.location.search);
+    if (next === "all") p.delete("type");
+    else p.set("type", next);
     const qs = p.toString();
     window.history.replaceState(null, "", qs ? `/search?${qs}` : "/search");
-  }, [term, filter]);
+  };
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     addRecentSearch("all", q);
+    flush();
     inputRef.current?.blur();
   };
 
@@ -80,7 +82,7 @@ export function SearchView() {
               type="button"
               aria-label="Clear search"
               onClick={() => {
-                setQ("");
+                setQ("", { immediate: true });
                 inputRef.current?.focus();
               }}
               className="inline-flex size-9 items-center justify-center rounded-full text-muted hover:bg-overlay hover:text-text"
@@ -99,7 +101,7 @@ export function SearchView() {
       </div>
 
       <div className="mt-10" onClickCapture={onResultsClick}>
-        {term ? <Results term={term} filter={filter} /> : <EmptySearch onPick={(t) => setQ(t)} />}
+        {term ? <Results term={term} filter={filter} /> : <EmptySearch onPick={(t) => setQ(t, { immediate: true })} />}
       </div>
     </div>
   );
@@ -192,7 +194,7 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
     <div className="space-y-10">
       {/* Top result + Songs */}
       {filter !== "movies" && filter !== "tv" && (
-        <div className={`mx-auto grid max-w-[110rem] gap-8 ${showSongsBeside ? "xl:grid-cols-2" : ""} ${PAD}`}>
+        <div className={`mx-auto grid max-w-[110rem] grid-cols-[minmax(0,1fr)] gap-8 ${showSongsBeside ? "xl:grid-cols-2" : ""} ${PAD}`}>
           <section aria-labelledby="top-result" className="space-y-3">
             <h2 id="top-result" className="font-display text-xl font-bold tracking-tight sm:text-[22px]">
               Top result

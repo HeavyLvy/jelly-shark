@@ -6,6 +6,7 @@ import { Check } from "lucide-react";
 import { ArtFallback, CommunityRating, NewBadge, ProgressBar } from "@/components/media/bits";
 import { JfImage } from "@/components/media/jf-image";
 import { PosterCard, isWatched } from "@/components/media/cards";
+import { useMediaMenu } from "@/components/media/media-menu";
 import { POSTER_GRID_SIZES } from "@/lib/ui-config";
 import { Skeleton } from "@/components/ui/states";
 import { dotJoin, formatRating, formatRuntime, formatTimeLeft, formatYears, isRecentlyAdded, playedPercent } from "@/lib/format";
@@ -54,50 +55,55 @@ export function LibraryListRow({ item, now }: { item: BaseItemDto; now: Date | n
           : null
         : formatRuntime(item.RunTimeTicks);
 
+  const { onContextMenu, menu } = useMediaMenu(item);
   return (
-    <Link
-      href={detailHref(item)}
-      className="group grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-4 rounded-card px-2 py-1.5 transition hover:bg-surface md:grid-cols-[2.5rem_minmax(0,1fr)_7rem_6rem_4.5rem_8rem]"
-    >
-      <div className="relative aspect-[2/3] w-10 overflow-hidden rounded-[6px] bg-surface ring-1 ring-hairline">
-        <JfImage
-          image={pickImage(item, "poster")}
-          alt=""
-          sizes="40px"
-          className="absolute inset-0"
-          fallback={<ArtFallback title="" className="p-0" />}
-        />
-        {pct !== null && <ProgressBar percent={pct} className="absolute inset-x-0 bottom-0" />}
-      </div>
-      <div className="min-w-0">
-        <p className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-text">{name}</span>
-          {isNew && <NewBadge label="New" className="shrink-0" />}
-        </p>
-        {/* Phones: the meta columns collapse into a subline. */}
-        <p className="truncate text-xs text-muted md:hidden">{dotJoin(year, length, rating && `★ ${rating}`)}</p>
-      </div>
-      <span className="hidden text-sm text-text-secondary md:block">{year ?? "—"}</span>
-      <span className="hidden text-sm text-text-secondary md:block">{length ?? "—"}</span>
-      <span className="hidden text-sm text-text-secondary md:block">
-        {rating ? <CommunityRating value={rating} /> : <span aria-label="No rating">—</span>}
-      </span>
-      <span className="justify-self-end text-xs md:justify-self-start md:text-sm">
-        {played ? (
-          <span className="inline-flex items-center gap-1.5 font-semibold text-accent">
-            <Check className="size-4" strokeWidth={3} aria-hidden="true" />
-            Watched
-          </span>
-        ) : left ? (
-          <span className="text-text-secondary">{left}</span>
-        ) : (
-          <span className="text-muted">
-            <span className="hidden md:inline">Unwatched</span>
-            <span className="sr-only md:hidden">Unwatched</span>
-          </span>
-        )}
-      </span>
-    </Link>
+    <>
+      <Link
+        href={detailHref(item)}
+        onContextMenu={onContextMenu}
+        className="group grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-4 rounded-card px-2 py-1.5 transition hover:bg-surface md:grid-cols-[2.5rem_minmax(0,1fr)_7rem_6rem_4.5rem_8rem]"
+      >
+        <div className="relative aspect-[2/3] w-10 overflow-hidden rounded-[6px] bg-surface ring-1 ring-hairline">
+          <JfImage
+            image={pickImage(item, "poster")}
+            alt=""
+            sizes="40px"
+            className="absolute inset-0"
+            fallback={<ArtFallback title="" className="p-0" />}
+          />
+          {pct !== null && <ProgressBar percent={pct} className="absolute inset-x-0 bottom-0" />}
+        </div>
+        <div className="min-w-0">
+          <p className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-text">{name}</span>
+            {isNew && <NewBadge label="New" className="shrink-0" />}
+          </p>
+          {/* Phones: the meta columns collapse into a subline. */}
+          <p className="truncate text-xs text-muted md:hidden">{dotJoin(year, length, rating && `★ ${rating}`)}</p>
+        </div>
+        <span className="hidden text-sm text-text-secondary md:block">{year ?? "—"}</span>
+        <span className="hidden text-sm text-text-secondary md:block">{length ?? "—"}</span>
+        <span className="hidden text-sm text-text-secondary md:block">
+          {rating ? <CommunityRating value={rating} /> : <span aria-label="No rating">—</span>}
+        </span>
+        <span className="justify-self-end text-xs md:justify-self-start md:text-sm">
+          {played ? (
+            <span className="inline-flex items-center gap-1.5 font-semibold text-accent">
+              <Check className="size-4" strokeWidth={3} aria-hidden="true" />
+              Watched
+            </span>
+          ) : left ? (
+            <span className="text-text-secondary">{left}</span>
+          ) : (
+            <span className="text-muted">
+              <span className="hidden md:inline">Unwatched</span>
+              <span className="sr-only md:hidden">Unwatched</span>
+            </span>
+          )}
+        </span>
+      </Link>
+      {menu}
+    </>
   );
 }
 

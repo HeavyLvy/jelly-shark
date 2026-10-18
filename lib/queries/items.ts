@@ -89,6 +89,12 @@ export function useToggleFavorite() {
     onSuccess: (data, { item }) => {
       if (item.Id) patchItemUserData(qc, item.Id, data);
     },
+    // Lists made of favourites gain/lose this item.
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: jfKeys.home("favorites") });
+      void qc.invalidateQueries({ predicate: (q) => q.queryKey[1] === "library" && (q.queryKey[2] as { type?: string } | undefined)?.type === "favorites" });
+      void qc.invalidateQueries({ queryKey: ["jf", "library-total", "favorites"] });
+    },
   });
 }
 

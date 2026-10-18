@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { useId, useRef, useState, type FormEvent } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
-import { Check, Disc3, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Shuffle, Trash2, User } from "lucide-react";
+import { Check, Disc3, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Shuffle, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
-import { FloatingMenu, type MenuAnchor } from "@/components/ui/floating-menu";
+import { FloatingMenu, menuItemCls, type MenuAnchor } from "@/components/ui/floating-menu";
+import { FavoriteMenuItem } from "@/components/media/media-menu";
 import { Spinner } from "@/components/ui/states";
 import { usePlayer, type PlaySource } from "@/lib/player/store";
 import { useAddToPlaylist, useCreatePlaylist, usePlaylists } from "@/lib/queries/playlists";
+import { fetchRadio } from "@/lib/queries/music";
 
-export const menuItemCls =
-  "flex w-full items-center gap-3 rounded-card px-3 py-2 text-left text-sm text-text-secondary transition hover:bg-overlay hover:text-text focus-visible:bg-overlay focus-visible:text-text focus-visible:outline-none disabled:opacity-50";
+export { menuItemCls };
 
 /**
  * Menu contents for one or more tracks (shared by the "⋯" button and right-click):
@@ -125,6 +126,27 @@ export function TrackMenuBody({
       <button type="button" role="menuitem" className={menuItemCls} onClick={() => setView("playlists")}>
         <ListPlus className="size-4" aria-hidden="true" /> Add to playlist…
       </button>
+      {single?.Id && <FavoriteMenuItem item={single} onDone={onClose} />}
+      {single?.Id && (
+        <button
+          type="button"
+          role="menuitem"
+          disabled={busy}
+          className={menuItemCls}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const mix = await fetchRadio(single);
+              if (mix.length) usePlayer.getState().playItems(mix, 0, { label: `${single.Name ?? "Song"} radio` });
+            } finally {
+              setBusy(false);
+              onClose();
+            }
+          }}
+        >
+          <Radio className="size-4" aria-hidden="true" /> Start radio
+        </button>
+      )}
       {albumId && (
         <Link role="menuitem" href={`/music/album/${albumId}`} className={menuItemCls} onClick={onClose}>
           <Disc3 className="size-4" aria-hidden="true" /> Go to album

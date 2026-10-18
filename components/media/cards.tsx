@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMediaMenu } from "./media-menu";
 import type { MouseEventHandler, ReactNode } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { Play } from "lucide-react";
@@ -42,28 +43,33 @@ export function isWatched(item: BaseItemDto): boolean {
 export function PosterCard({ item, subtitle, badge, fluid, sizes = POSTER_SIZES, preload, className }: PosterCardProps) {
   const pct = playedPercent(item);
   const name = item.Name ?? "Untitled";
+  const { onContextMenu, menu } = useMediaMenu(item);
   return (
-    <Link
-      href={detailHref(item)}
-      className={cn("group block shrink-0 rounded-card outline-offset-4", fluid ? "w-full" : "w-poster", className)}
-    >
-      <div className="relative aspect-[2/3] overflow-hidden rounded-card bg-surface ring-1 ring-hairline transition group-hover:ring-hairline-strong">
-        <JfImage
-          image={pickImage(item, "poster")}
-          alt=""
-          sizes={sizes}
-          preload={preload}
-          className="absolute inset-0"
-          imgClassName="transition duration-300 group-hover:scale-[1.03]"
-          fallback={<ArtFallback title={name} />}
-        />
-        {badge && <NewBadge label={badge} className="absolute top-2.5 left-2.5" />}
-        {isWatched(item) && <WatchedBadge className="absolute top-2.5 right-2.5" />}
-        {pct !== null && <ProgressBar percent={pct} className="absolute inset-x-0 bottom-0" />}
-      </div>
-      <p className="mt-2 truncate text-sm font-medium text-text">{name}</p>
-      <p className="truncate text-xs text-muted">{subtitle ?? dotJoin(typeLabel(item), item.ProductionYear)}</p>
-    </Link>
+    <>
+      <Link
+        href={detailHref(item)}
+        onContextMenu={onContextMenu}
+        className={cn("group block shrink-0 rounded-card outline-offset-4", fluid ? "w-full" : "w-poster", className)}
+      >
+        <div className="relative aspect-[2/3] overflow-hidden rounded-card bg-surface ring-1 ring-hairline transition group-hover:ring-hairline-strong">
+          <JfImage
+            image={pickImage(item, "poster")}
+            alt=""
+            sizes={sizes}
+            preload={preload}
+            className="absolute inset-0"
+            imgClassName="transition duration-300 group-hover:scale-[1.03]"
+            fallback={<ArtFallback title={name} />}
+          />
+          {badge && <NewBadge label={badge} className="absolute top-2.5 left-2.5" />}
+          {isWatched(item) && <WatchedBadge className="absolute top-2.5 right-2.5" />}
+          {pct !== null && <ProgressBar percent={pct} className="absolute inset-x-0 bottom-0" />}
+        </div>
+        <p className="mt-2 truncate text-sm font-medium text-text">{name}</p>
+        <p className="truncate text-xs text-muted">{subtitle ?? dotJoin(typeLabel(item), item.ProductionYear)}</p>
+      </Link>
+      {menu}
+    </>
   );
 }
 
@@ -74,8 +80,9 @@ export function LandscapeCard({ item, sizes = "312px", className }: { item: Base
   const title = (isEpisode ? item.SeriesName : item.Name) ?? "Untitled";
   const sub = isEpisode ? dotJoin(episodeCode(item), item.Name) : dotJoin(typeLabel(item), item.ProductionYear);
   const left = formatTimeLeft(item);
+  const { onContextMenu, menu } = useMediaMenu(item);
   return (
-    <div className={cn("group relative w-landscape shrink-0", className)}>
+    <div className={cn("group relative w-landscape shrink-0", className)} onContextMenu={onContextMenu}>
       <Link href={detailHref(item)} className="block rounded-card outline-offset-4">
         <div className="relative aspect-video overflow-hidden rounded-card bg-surface ring-1 ring-hairline transition group-hover:ring-hairline-strong">
           <JfImage
@@ -103,6 +110,7 @@ export function LandscapeCard({ item, sizes = "312px", className }: { item: Base
           <Play className="size-3.5 fill-current" aria-hidden="true" />
         </Link>
       )}
+      {menu}
     </div>
   );
 }

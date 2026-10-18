@@ -28,6 +28,11 @@ const streamsOf = (item: BaseItemDto): MediaStream[] => item.MediaSources?.[0]?.
 export const audioStreams = (item: BaseItemDto) => streamsOf(item).filter((s) => s.Type === "Audio");
 export const subtitleStreams = (item: BaseItemDto) => streamsOf(item).filter((s) => s.Type === "Subtitle");
 
+/** WebVTT URL for a text subtitle stream (Jellyfin converts SRT/ASS/… on the fly). */
+export function subtitleSrc(itemId: string, mediaSourceId: string, index: number | null | undefined): string {
+  return jfUrl(`/Videos/${itemId}/${mediaSourceId}/Subtitles/${index ?? 0}/0/Stream.vtt`);
+}
+
 export function streamLabel(s: MediaStream): string {
   return s.DisplayTitle || [s.Language?.toUpperCase(), s.Codec?.toUpperCase()].filter(Boolean).join(" · ") || `Track ${s.Index}`;
 }
@@ -52,6 +57,17 @@ export function chooseTracks(item: BaseItemDto, prefs: VideoPrefs): TrackChoice 
   return { audioIndex: chosenAudio?.Index ?? null, subtitleIndex: sub?.Index ?? -1 };
 }
 
+/** Make sure the stream URL asks for the chosen audio track (Jellyfin has returned the default one instead). */
+function withAudioIndex(url: string, audioIndex: number | null): string {
+  if (audioIndex === null) return url;
+  const [path, qs = ""] = url.split("?");
+  const params = new URLSearchParams(qs);
+  const current = params.get("AudioStreamIndex");
+  if (current === String(audioIndex)) return url;
+  params.set("AudioStreamIndex", String(audioIndex));
+  return `${path}?${params.toString()}`;
+}
+
 /**
  * Ask Jellyfin how to play this item in this browser. Direct play when the
  * file fits the profile and the default audio track is wanted; otherwise an
@@ -73,6 +89,8 @@ export async function negotiateVideo(
     {
       itemId,
       playbackInfoDto: {
+        // Jellyfin only honours AudioStreamIndex / SubtitleStreamIndex for a named media source.
+        MediaSourceId: item.MediaSources?.[0]?.Id ?? undefined,
         DeviceProfile: videoDeviceProfile(),
         MaxStreamingBitrate: maxBitrate ?? 120_000_000,
         AudioStreamIndex: choice.audioIndex ?? undefined,
@@ -97,7 +115,7 @@ export async function negotiateVideo(
   const textTrack =
     sub && isText
       ? {
-          src: jfUrl(`/Videos/${itemId}/${ms.Id}/Subtitles/${sub.Index}/0/Stream.vtt`),
+          src: subtitleSrc(itemId, ms.Id, sub.Index),
           lang: sub.Language ?? "und",
           label: streamLabel(sub),
         }
@@ -115,7 +133,7 @@ export async function negotiateVideo(
   if (ms.TranscodingUrl) {
     return {
       ...base,
-      url: ms.TranscodingUrl,
+      url: withAudioIndex(ms.TranscodingUrl, choice.audioIndex),
       isHls: ms.TranscodingSubProtocol === "hls" || ms.TranscodingUrl.includes(".m3u8"),
       playMethod: ms.SupportsDirectStream ? "DirectStream" : "Transcode",
     };

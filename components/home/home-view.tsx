@@ -11,9 +11,12 @@ import {
   MusicRowSkeleton,
   RecentlyAddedRow,
   RowSkeleton,
+  FavoritesRow,
+  RecentlyWatchedRow,
   PopularRow,
   PopularRowSkeleton,
 } from "./home-rows";
+import { useUiPrefs, type HomeRowId } from "@/lib/ui-prefs";
 
 const MAX_SLIDES = 5;
 
@@ -44,6 +47,8 @@ function seedFrom(slide: HeroSlide | undefined): Seed | null {
 }
 
 export function HomeView() {
+  const { hiddenRows } = useUiPrefs();
+  const show = (id: HomeRowId) => !hiddenRows.includes(id);
   const resume = useResumeVideos();
   const latest = useLatestVideo();
 
@@ -74,13 +79,16 @@ export function HomeView() {
           description="Once your Jellyfin libraries have movies or shows with artwork, they'll show up here."
         />
       )}
+      {/* Rows can be hidden in Settings → Home. */}
       <div className="relative z-10 flex flex-col gap-10 pb-20 sm:gap-12">
-        <ContinueWatchingRow />
-        <PopularRow />
-        <RecentlyAddedRow />
+        {show("continue") && <ContinueWatchingRow />}
+        {show("popular") && <PopularRow />}
+        {show("favorites") && <FavoritesRow />}
+        {show("recentlyWatched") && <RecentlyWatchedRow />}
+        {show("recentlyAdded") && <RecentlyAddedRow />}
         {/* The "More Like" fallback needs the hero's first title; hold its slot meanwhile. */}
-        {heroPending ? <RowSkeleton shape="poster" /> : <BecauseYouWatchedRow fallback={seedFrom(featured)} />}
-        <MusicRow />
+        {show("becauseYouWatched") && (heroPending ? <RowSkeleton shape="poster" /> : <BecauseYouWatchedRow fallback={seedFrom(featured)} />)}
+        {show("music") && <MusicRow />}
       </div>
     </>
   );

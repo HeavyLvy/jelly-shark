@@ -1,0 +1,24 @@
+# docker compose up -d --build
+# Then open http://<this machine>:3100
+services:
+  jelly-shark:
+    build:
+      context: .
+      args:
+        # Poster width in px (120-400), baked in at build time. Default 215.
+        NEXT_PUBLIC_POSTER_WIDTH: ${NEXT_PUBLIC_POSTER_WIDTH:-215}
+    image: jelly-shark:latest
+    container_name: jelly-shark
+    restart: unless-stopped
+    ports:
+      - "3100:3000"
+    environment:
+      # Your Jellyfin server, reachable from inside the container (use its LAN IP, not localhost).
+      JELLYFIN_URL: ${JELLYFIN_URL:?set JELLYFIN_URL in .env}
+      # 32+ random characters used to encrypt the session cookie: openssl rand -base64 48
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+    volumes:
+      - jelly-shark-data:/data
+
+volumes:
+  jelly-shark-data:

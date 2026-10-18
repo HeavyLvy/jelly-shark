@@ -13,11 +13,13 @@ import { SelectMenu } from "@/components/ui/select-menu";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { dotJoin, formatYears, isRecentlyAdded, typeLabel } from "@/lib/format";
 import { useSimilar } from "@/lib/queries/items";
+import { useWatchHistory } from "@/lib/queries/history";
 import {
   useJumpBackAlbums,
   useLastPlayedSeed,
   useLatestVideo,
   useNextUp,
+  useFavoriteVideos,
   useMostPopular,
   useResumeVideos,
   POPULAR_PERIODS,
@@ -177,6 +179,44 @@ function recentSubtitle(item: BaseItemDto, recent: boolean): string {
   if (!recent) return dotJoin(typeLabel(item), formatYears(item));
   const n = item.ChildCount ?? 0;
   return dotJoin(typeLabel(item), n > 1 ? `${n} new episodes` : "New episodes");
+}
+
+/* ---------- Recently Watched ---------- */
+
+export function RecentlyWatchedRow() {
+  const history = useWatchHistory(16);
+  const title = "Recently Watched";
+  if (history.isPending) return <RowSkeleton shape="landscape" count={5} />;
+  if (history.isError) return <RowError title={title} onRetry={() => void history.refetch()} />;
+  if (history.data.length === 0) return null;
+  return (
+    <MediaRow title={title} seeAllHref="/history">
+      {history.data.map((item) => (
+        <RowItem key={item.Id}>
+          <LandscapeCard item={item} />
+        </RowItem>
+      ))}
+    </MediaRow>
+  );
+}
+
+/* ---------- Your Favorites ---------- */
+
+export function FavoritesRow() {
+  const favs = useFavoriteVideos();
+  const title = "Your Favorites";
+  if (favs.isPending) return <RowSkeleton shape="poster" />;
+  if (favs.isError) return <RowError title={title} onRetry={() => void favs.refetch()} />;
+  if (favs.data.length === 0) return null;
+  return (
+    <MediaRow title={title} seeAllHref="/library?type=favorites">
+      {favs.data.map((item) => (
+        <RowItem key={item.Id}>
+          <PosterCard item={item} subtitle={dotJoin(typeLabel(item), item.Type === "Series" ? formatYears(item) : item.ProductionYear)} />
+        </RowItem>
+      ))}
+    </MediaRow>
+  );
 }
 
 export function RecentlyAddedRow() {

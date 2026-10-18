@@ -11,6 +11,7 @@ import { useNow } from "@/lib/use-now";
 import { LibraryGridCard, LibraryListRow, ListHeader, ListRowSkeleton } from "./library-items";
 import { GRID_GAP_CLASS, LibraryGridSkeleton, LibraryListSkeleton } from "./library-skeleton";
 import { posterColumns } from "@/lib/ui-config";
+import { usePosterWidth } from "@/lib/ui-prefs";
 
 const COL_GAP = { sm: 16, lg: 20 };
 const ROW_GAP = 32;
@@ -77,7 +78,8 @@ function VirtualResults({ view, items, hasNextPage, isFetchingNextPage, isFetchN
   const isGrid = view === "grid";
   const colGap = width >= 640 ? COL_GAP.lg : COL_GAP.sm;
   // Posters stay ≈ NEXT_PUBLIC_POSTER_WIDTH on any monitor; wider screens get more columns.
-  const cols = isGrid ? posterColumns(width || 1200, colGap) : 1;
+  const posterWidth = usePosterWidth();
+  const cols = isGrid ? posterColumns(width || 1200, colGap, posterWidth) : 1;
 
   const rows = useMemo(() => {
     const out: BaseItemDto[][] = [];
@@ -200,7 +202,7 @@ function LoaderRow({ isGrid, cols, failed, loading, onRetry }: { isGrid: boolean
   );
 }
 
-export function NoResults({ filtered, kindPlural, onClear }: { filtered: boolean; kindPlural: string; onClear: () => void }) {
+export function NoResults({ filtered, kindPlural, onClear, emptyHint }: { filtered: boolean; kindPlural: string; onClear: () => void; emptyHint?: string }) {
   return filtered ? (
     <EmptyState
       title={`No ${kindPlural} match`}
@@ -212,6 +214,6 @@ export function NoResults({ filtered, kindPlural, onClear }: { filtered: boolean
       }
     />
   ) : (
-    <EmptyState title={`No ${kindPlural} yet`} description={`When ${kindPlural} are added to your Jellyfin server, they'll show up here.`} />
+    <EmptyState title={`No ${kindPlural} yet`} description={emptyHint ?? `When ${kindPlural} are added to your Jellyfin server, they'll show up here.`} />
   );
 }

@@ -59,6 +59,16 @@
   --spacing-album: 168px;
 }
 
+/* Phones: cards shrink with the screen so ~2½ posters fit across (desktop sizes
+   would show barely 1½ on a 360px screen). */
+@media (width < 40rem) {
+  :root {
+    --spacing-poster: min(var(--poster-width), 38vw);
+    --spacing-landscape: min(312px, 78vw);
+    --spacing-album: min(168px, 40vw);
+  }
+}
+
 @layer base {
   html {
     color-scheme: dark;
@@ -222,8 +232,29 @@
 :root {
   --player-space: 0px;
 }
+/* Height of Music's phone/tablet tab bar (shown below lg); the player bar floats above it. */
+@media (width < 64rem) {
+  html[data-music-tabs] {
+    --tabs-space: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+}
 html[data-player] #main {
   padding-bottom: calc(var(--player-space) + 0.75rem);
+}
+
+/* Video subtitle appearance (player ⚙ menu / Settings). */
+[data-sub-size="small"] video::cue { font-size: 80%; }
+[data-sub-size="large"] video::cue { font-size: 130%; }
+[data-sub-size="xlarge"] video::cue { font-size: 165%; }
+[data-sub-style="shadow"] video::cue {
+  background-color: transparent;
+  text-shadow: 0 0 4px #000, 0 1px 3px #000, 0 0 1px #000;
+}
+
+/* Marquee (long Now Playing titles): hold, glide to the end, hold; alternates back. */
+@keyframes marquee {
+  0%, 18% { transform: translateX(0); }
+  82%, 100% { transform: translateX(var(--marquee-shift)); }
 }
 
 /* Lyrics instrumental gap: dots light at 5% / 33% / 66% of the gap (as in Spotify-style players). */
