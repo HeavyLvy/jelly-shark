@@ -1,0 +1,40 @@
+Jelly Shark
+Copyright 2026 HeavyLvy
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Jelly Shark is an independent project. It is not affiliated with, endorsed by,
+or sponsored by the Jellyfin project; "Jellyfin" is a trademark of its owners.
+
+THIRD-PARTY SOFTWARE
+--------------------
+Jelly Shark depends on open-source packages, installed from npm (see
+package.json / package-lock.json for the exact list and versions). Every
+package that ships with the app or its container image is under a permissive
+license (MIT, ISC, BSD, 0BSD, Apache-2.0) apart from the ones below, which
+carry attribution or source-availability terms:
+
+- @jellyfin/sdk (MPL-2.0) - https://github.com/jellyfin/jellyfin-sdk-typescript
+  Used unmodified. Its source is available at the address above; the MPL-2.0
+  applies to that package's own files only, not to Jelly Shark.
+
+- sharp libvips binaries (LGPL-3.0-or-later): @img/sharp-libvips-* and
+  @img/sharp-wasm32. Installed by Next.js as an optional image-processing
+  dependency and present in the container image. Jelly Shark does not use them
+  (it loads images through its own loader), and they are separate, unmodified
+  shared libraries. Their source and license: https://github.com/lovell/sharp-libvips
+
+- caniuse-lite (CC-BY-4.0) - browser-support data used by build tooling.
+  Source: https://github.com/browserslist/caniuse-lite
+
+- Bricolage Grotesque and DM Sans fonts (SIL Open Font License 1.1), loaded via
+  next/font from Google Fonts and served from this app's own origin.
+  https://fonts.google.com/specimen/Bricolage+Grotesque
+  https://fonts.google.com/specimen/DM+Sans
+
+Development-only tools (linting, type checking, the Drizzle migration
+generator, the Tailwind compiler) are not part of the shipped application.
+Of those, axe-core and lightningcss are MPL-2.0.
+
+None of the Apache-2.0 dependencies (drizzle-orm, hls.js, typescript) ships a
+NOTICE file of its own.

@@ -42,3 +42,8 @@ Checks: `npx tsc --noEmit`, `npm run lint`, `npm run build`.
 - Seek-bar preview thumbnails appear after Jellyfin has generated trickplay images
   (Dashboard → Libraries → enable trickplay extraction, then run the *Generate Trickplay Images* task).
 - Skip Intro buttons need media segments (an intro-detection plugin) on the server.
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE) (which also lists third-party attributions).
+Jelly Shark is an independent project and is not affiliated with Jellyfin.

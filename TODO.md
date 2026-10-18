@@ -2,7 +2,7 @@
 
 ## Bugs to confirm
 
-- **Short music stutter on fullscreen, F-keys or the Windows key.** Mitigated (removed blur from the large music panels), not confirmed fixed. If it still happens, turn on `localStorage.setItem("jelly-debug-audio", "1")` and check the console when it stutters.
+- **Brief music stutter when pressing the Windows or Alt key (or going in/out of fullscreen).** Much less than before the blur was removed from the large music panels, and now intermittent: it stopped reproducing on demand (2026-10-17), so the cause is unknown. If you can reproduce it, turn on `localStorage.setItem("jelly-debug-audio", "1")` and check the console when it stutters.
 - **KDE's repeat button doesn't sync with the app.** The Media Session API has no repeat state, so the browser can't report it to KDE. Probably can't be fixed from the web app.
 
 ## Phase 6: polish
