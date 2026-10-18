@@ -3,8 +3,9 @@
 import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ImageEditor } from "./image-editor";
 import { cn } from "@/components/ui/cn";
-import { ICON_MAX_BYTES, ICON_PRESETS, BRAND_NAME_MAX, DEFAULT_BRAND, MIN_ACCENT_CONTRAST, accentContrast, isHexColor, onAccent, type IconPresetId } from "@/lib/brand";
+import { ICON_PRESETS, BRAND_NAME_MAX, DEFAULT_BRAND, MIN_ACCENT_CONTRAST, accentContrast, isHexColor, onAccent, type IconPresetId } from "@/lib/brand";
 import { iconUrl, setBrandState, useBrand, type BrandState } from "@/lib/brand-client";
 
 /** Accent swatches to start from (any color works; too-dark ones are flagged). */
@@ -30,6 +31,7 @@ export function BrandingSection() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState<Blob | null>(null);
 
   const contrast = isHexColor(draft.accent) ? accentContrast(draft.accent) : null;
   const colorProblem = !isHexColor(draft.accent) ? "Enter a color like #2fc7d9." : contrast !== null && contrast < MIN_ACCENT_CONTRAST ? "Too dark to read on the dark background." : null;
@@ -40,14 +42,32 @@ export function BrandingSection() {
   const valid = !nameProblem && !colorProblem && !iconProblem;
   const accent = isHexColor(draft.accent) ? draft.accent : brand.accent;
 
+  /** A chosen file opens the editor first (crop/resize); only the edited result becomes the pending upload. */
   const pickFile = (f: File | null) => {
     setMessage(null);
     if (!f) return;
-    if (f.size > ICON_MAX_BYTES) return setMessage({ ok: false, text: "The icon must be 512 KB or smaller." });
+    // Raw files can be big (photos); the editor shrinks them, so only a sanity limit here.
+    if (f.size > 20 * 1024 * 1024) return setMessage({ ok: false, text: "That image is too large to edit (20 MB max)." });
+    setEditing(f);
+  };
+
+  const applyEdited = (f: File) => {
     if (fileUrl) URL.revokeObjectURL(fileUrl);
     setFile(f);
     setFileUrl(URL.createObjectURL(f));
     setDraft((d) => ({ ...d, icon: "upload" }));
+    setEditing(null);
+  };
+
+  /** Re-edit the image that's pending, or the one currently saved. */
+  const editCurrent = async () => {
+    if (file) return setEditing(file);
+    try {
+      const res = await fetch(iconUrl(version));
+      if (res.ok) setEditing(await res.blob());
+    } catch {
+      setMessage({ ok: false, text: "Couldn't load the current icon." });
+    }
   };
 
   const save = async () => {
@@ -155,14 +175,30 @@ export function BrandingSection() {
               )}
               {uploadSrc ? "Your image" : "Upload…"}
             </button>
-            <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="sr-only" aria-label="Upload an icon" onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              className="sr-only"
+              aria-label="Upload an icon"
+              onChange={(e) => {
+                pickFile(e.target.files?.[0] ?? null);
+                e.target.value = ""; // picking the same file again should reopen the editor
+              }}
+            />
           </div>
           <p className="mt-2 text-xs text-muted">
-            Upload a square PNG, JPEG, WebP or SVG up to 512 KB.{" "}
+            Upload any PNG, JPEG, WebP or SVG, then crop and resize it to a square.{" "}
             {uploadSrc && (
-              <button type="button" onClick={() => fileInput.current?.click()} className="font-semibold text-text hover:underline">
-                Choose a different image
-              </button>
+              <>
+                <button type="button" onClick={() => void editCurrent()} className="font-semibold text-text hover:underline">
+                  Edit
+                </button>
+                {" · "}
+                <button type="button" onClick={() => fileInput.current?.click()} className="font-semibold text-text hover:underline">
+                  Choose a different image
+                </button>
+              </>
             )}
           </p>
           {iconProblem && <span className="mt-1 block text-xs text-danger">{iconProblem}</span>}
@@ -208,6 +244,7 @@ export function BrandingSection() {
           )}
         </div>
       </div>
+      {editing && <ImageEditor source={editing} onApply={applyEdited} onCancel={() => setEditing(null)} />}
     </section>
   );
 }

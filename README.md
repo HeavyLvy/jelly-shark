@@ -16,7 +16,7 @@ Open `http://<this machine>:3100` and sign in with your Jellyfin account (or Qui
 
 - **Settings** (playback, subtitles, poster size, Home rows…) are stored per user in a SQLite database on the
   `jelly-shark-data` volume (`/data/jelly-shark.db`). Back that volume up if you care about them; delete it to reset.
-- **Branding:** Jellyfin administrators can change the app's name, icon (built-in presets or an uploaded PNG/JPEG/WebP/SVG)
+- **Branding:** Jellyfin administrators can change the app's name, icon (built-in presets, or any PNG/JPEG/WebP/SVG you upload, which opens in a crop-and-resize editor first)
   and accent color in Settings → Branding. It applies to everyone on the server, including the login page, and is stored
   in the same database; "Reset to defaults" restores the built-in look. (The name shown in Jellyfin's device list stays "Jelly Shark".)
 - **Poster size** is a build-time value: `NEXT_PUBLIC_POSTER_WIDTH` in `.env` (120–400, default 215), then rebuild.
