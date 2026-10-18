@@ -16,6 +16,9 @@ Open `http://<this machine>:3100` and sign in with your Jellyfin account (or Qui
 
 - **Settings** (playback, subtitles, poster size, Home rows…) are stored per user in a SQLite database on the
   `jelly-shark-data` volume (`/data/jelly-shark.db`). Back that volume up if you care about them; delete it to reset.
+- **Branding:** Jellyfin administrators can change the app's name, icon (built-in presets or an uploaded PNG/JPEG/WebP/SVG)
+  and accent color in Settings → Branding. It applies to everyone on the server, including the login page, and is stored
+  in the same database; "Reset to defaults" restores the built-in look. (The name shown in Jellyfin's device list stays "Jelly Shark".)
 - **Poster size** is a build-time value: `NEXT_PUBLIC_POSTER_WIDTH` in `.env` (120–400, default 215), then rebuild.
 - **Health:** `GET /api/health` returns `{"ok":true}`; the image has a Docker `HEALTHCHECK` on it.
 - Plain `docker build -t jelly-shark . && docker run -p 3100:3000 -e JELLYFIN_URL=… -e SESSION_SECRET=… -v jelly-shark-data:/data jelly-shark` works too.

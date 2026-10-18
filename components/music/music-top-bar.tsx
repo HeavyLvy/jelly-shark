@@ -7,7 +7,7 @@ import { Clapperboard, Folders, Home, Search, Tv } from "lucide-react";
 import { UserMenu } from "@/components/nav/user-menu";
 import { cn } from "@/components/ui/cn";
 import { FloatingMenu, type MenuAnchor } from "@/components/ui/floating-menu";
-import { SharkGlyph } from "@/components/ui/logo";
+import { BrandIcon, useBrandName } from "@/components/ui/brand-icon";
 import { addRecentSearch } from "@/lib/recent-searches";
 import { useUrlSearchQuery } from "@/lib/use-url-search-query";
 import { menuItemCls } from "./track-menu";
@@ -17,6 +17,7 @@ import { menuItemCls } from "./track-menu";
  * shark logo menu (back out to Home / Library / Search) · music home + search · account.
  */
 export function MusicTopBar() {
+  const brandName = useBrandName();
   const pathname = usePathname();
   const router = useRouter();
   const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
@@ -62,11 +63,11 @@ export function MusicTopBar() {
         }}
         className="flex size-11 shrink-0 items-center justify-center rounded-full text-accent transition hover:bg-overlay"
       >
-        <SharkGlyph className="size-7" />
+        <BrandIcon className="size-7" />
       </button>
       {anchor && (
         <FloatingMenu anchor={anchor} onClose={close} label="Go to" triggerRef={logoRef} className="w-56">
-          <p className="px-3 pt-1.5 pb-1 text-xs font-semibold tracking-wider text-muted uppercase">Jelly Shark</p>
+          <p className="px-3 pt-1.5 pb-1 text-xs font-semibold tracking-wider text-muted uppercase">{brandName}</p>
           {links.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} role="menuitem" className={menuItemCls} onClick={() => close()}>
               <Icon className="size-4" aria-hidden="true" /> {label}

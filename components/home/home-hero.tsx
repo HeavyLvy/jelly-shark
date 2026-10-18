@@ -8,7 +8,7 @@ import { AddToListButton, FavoriteButton, HeroBackdrop, MoreInfoButton, PlayButt
 import { Button } from "@/components/ui/button";
 import { TagChip } from "@/components/ui/chip";
 import { cn } from "@/components/ui/cn";
-import { SharkGlyph } from "@/components/ui/logo";
+import { BrandIcon } from "@/components/ui/brand-icon";
 import { ErrorState, Skeleton } from "@/components/ui/states";
 import { dotJoin, episodeCode, formatEndsAt, formatRating, formatRuntime, formatYears, playedPercent, remainingTicks } from "@/lib/format";
 import { useSeriesPlayTarget } from "@/lib/queries/home";
@@ -198,7 +198,7 @@ function SlideContent({ slide }: { slide: HeroSlide }) {
   return (
     <>
       <p className="mb-3 flex items-center gap-2 text-[11px] font-bold tracking-[0.14em] text-accent uppercase sm:text-xs">
-        <SharkGlyph className="size-4" />
+        <BrandIcon className="size-4" />
         {source === "resume" ? "Continue watching" : "Featured in your library"}
       </p>
       <TitleTreatment item={item} as="h2" />

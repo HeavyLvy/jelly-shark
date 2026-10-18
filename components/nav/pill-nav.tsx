@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, LibraryBig, Music2, Search, type LucideIcon } from "lucide-react";
-import { SharkGlyph } from "@/components/ui/logo";
+import { BrandIcon, useBrandName } from "@/components/ui/brand-icon";
 import { cn } from "@/components/ui/cn";
 import { UserMenu } from "./user-menu";
 
@@ -27,6 +27,7 @@ const TABS: Tab[] = [
 ];
 
 function NavShell({ activePath }: { activePath: string | null }) {
+  const brandName = useBrandName();
   return (
     <nav
       aria-label="Primary"
@@ -37,10 +38,10 @@ function NavShell({ activePath }: { activePath: string | null }) {
     >
       <Link
         href="/"
-        aria-label="Jelly Shark home"
+        aria-label={`${brandName} home`}
         className="flex size-9 items-center justify-center rounded-full text-accent"
       >
-        <SharkGlyph className="size-6" />
+        <BrandIcon className="size-6" />
       </Link>
       {TABS.map((tab) => {
         const active = activePath !== null && tab.match(activePath);

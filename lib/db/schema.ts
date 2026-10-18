@@ -1,4 +1,4 @@
-import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { blob, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * Database schema (Drizzle). Change tables here, then run `npm run db:generate`
@@ -17,3 +17,18 @@ export const settings = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.key] })],
 );
+
+/** Instance-wide settings (not per user): e.g. the branding. One JSON value per key. */
+export const instanceSettings = sqliteTable("instance_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+/** Uploaded files kept in the database (e.g. the custom brand icon). */
+export const assets = sqliteTable("assets", {
+  key: text("key").primaryKey(),
+  mime: text("mime").notNull(),
+  data: blob("data", { mode: "buffer" }).notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});

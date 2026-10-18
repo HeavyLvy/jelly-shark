@@ -6,6 +6,8 @@ import { SelectMenu } from "@/components/ui/select-menu";
 import { Switch } from "@/components/ui/switch";
 import { QUALITY_OPTIONS, SUBTITLE_SIZES, readVideoPrefs, writeVideoPrefs, type VideoPrefs } from "@/lib/player/video-prefs";
 import { HOME_ROWS, posterWidthFor, setUiPrefs, useUiPrefs, type PosterSize } from "@/lib/ui-prefs";
+import { BrandingSection } from "./branding-section";
+import { useMe } from "@/lib/queries/auth";
 import { useSettingsVersion } from "@/lib/settings-sync";
 import { useIsClient } from "@/lib/use-is-client";
 
@@ -33,6 +35,8 @@ export function SettingsView() {
 }
 
 function SettingsBody() {
+  const me = useMe();
+  const isAdmin = !!me.data?.user.isAdministrator;
   const [prefs, setPrefs] = useState<VideoPrefs>(() => readVideoPrefs());
   const ui = useUiPrefs();
   const update = (patch: Partial<VideoPrefs>) => {
@@ -122,6 +126,8 @@ function SettingsBody() {
           </div>
         </Row>
       </Section>
+
+      {isAdmin && <BrandingSection />}
 
       <Section title="Home">
         {HOME_ROWS.map((r) => {
