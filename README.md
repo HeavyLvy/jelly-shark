@@ -16,6 +16,9 @@ Open `http://<this machine>:3100` and sign in with your Jellyfin account (or Qui
 
 - **Settings** (playback, subtitles, poster size, Home rows…) are stored per user in a SQLite database on the
   `jelly-shark-data` volume (`/data/jelly-shark.db`). Back that volume up if you care about them; delete it to reset.
+- **Quick Connect:** signed in on one device, you can sign another device into Jellyfin or Jelly Shark without leaving the app
+  (account menu or Settings → Approve a device, then type the 6-digit code the other device shows). It approves as the active
+  profile; Quick Connect must be enabled on the Jellyfin server.
 - **Branding:** Jellyfin administrators can change the app's name, icon (built-in presets, or any PNG/JPEG/WebP/SVG you upload, which opens in a crop-and-resize editor first)
   and accent color in Settings → Branding. It applies to everyone on the server, including the login page, and is stored
   in the same database; "Reset to defaults" restores the built-in look. (The name shown in Jellyfin's device list stays "Jelly Shark".)

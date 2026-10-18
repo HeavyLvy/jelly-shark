@@ -7,6 +7,7 @@ import { UiPrefsApplier } from "@/components/ui-prefs-applier";
 import { BrandApplier } from "@/components/brand-applier";
 import { SettingsSync } from "@/components/settings-sync";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
+import { QuickConnectDialog } from "@/components/quick-connect-dialog";
 import "./globals.css";
 
 const bricolage = Bricolage_Grotesque({
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <BrandApplier />
           <SettingsSync />
           <ShortcutsDialog />
+          <QuickConnectDialog />
         </Providers>
       </body>
     </html>

@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { QUALITY_OPTIONS, SUBTITLE_SIZES, readVideoPrefs, writeVideoPrefs, type VideoPrefs } from "@/lib/player/video-prefs";
 import { HOME_ROWS, posterWidthFor, setUiPrefs, useUiPrefs, type PosterSize } from "@/lib/ui-prefs";
 import { BrandingSection } from "./branding-section";
+import { Button } from "@/components/ui/button";
+import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
 import { useMe } from "@/lib/queries/auth";
 import { useSettingsVersion } from "@/lib/settings-sync";
 import { useIsClient } from "@/lib/use-is-client";
@@ -49,7 +51,7 @@ function SettingsBody() {
   return (
     <div className={`mx-auto max-w-3xl pt-28 pb-20 ${GUTTER}`}>
       <h1 className="font-display text-4xl font-extrabold tracking-display sm:text-5xl">Settings</h1>
-      <p className="mt-2 text-sm text-text-secondary">Saved in this browser.</p>
+      <p className="mt-2 text-sm text-text-secondary">Saved to your account, so they follow you to other devices.</p>
 
       <Section title="Playback">
         <Row label="Autoplay next episode" hint="Count down and play the next episode when one ends.">
@@ -124,6 +126,14 @@ function SettingsBody() {
               </button>
             ))}
           </div>
+        </Row>
+      </Section>
+
+      <Section title="Devices">
+        <Row label="Approve a device" hint="Sign another device into Jellyfin or Jelly Shark with Quick Connect, without leaving this page.">
+          <Button variant="secondary" onClick={() => window.dispatchEvent(new Event(OPEN_QUICK_CONNECT))}>
+            Enter a code
+          </Button>
         </Row>
       </Section>
 

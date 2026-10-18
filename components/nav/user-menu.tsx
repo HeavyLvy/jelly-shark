@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, History, Keyboard, LogOut, Settings, UserPlus } from "lucide-react";
+import { Check, ChevronDown, History, Keyboard, LogOut, Settings, Smartphone, UserPlus } from "lucide-react";
+import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
 import { OPEN_SHORTCUTS } from "@/components/shortcuts-dialog";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/components/ui/cn";
@@ -172,6 +173,18 @@ export function UserMenu() {
           >
             <Keyboard className="size-4" aria-hidden="true" />
             Shortcuts &amp; gestures
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new Event(OPEN_QUICK_CONNECT));
+            }}
+            className={cn(itemClass, "text-text-secondary hover:text-text")}
+          >
+            <Smartphone className="size-4" aria-hidden="true" />
+            Approve a device
           </button>
           <div className="my-1.5 h-px bg-hairline" role="separator" />
           <button
