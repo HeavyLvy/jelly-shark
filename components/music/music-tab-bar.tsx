@@ -14,7 +14,7 @@ const TABS = [
 
 /**
  * Spotify-style bottom tabs for Music below lg, where the library sidebar is
- * hidden. Sits at the very bottom; the player bar floats just above it
+ * hidden. Tablets only: phones use the main tab bar instead (Home and Your Library are in the music top bar). Sits at the very bottom; the player bar floats just above it
  * (globals.css: `--tabs-space`, set while this is mounted).
  */
 export function MusicTabBar() {
@@ -25,7 +25,7 @@ export function MusicTabBar() {
     return () => html.removeAttribute("data-music-tabs");
   }, []);
   return (
-    <nav aria-label="Music" className="jelly fixed inset-x-0 bottom-0 z-40 rounded-none border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)] lg:hidden">
+    <nav aria-label="Music" className="jelly fixed inset-x-0 bottom-0 z-40 rounded-none border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)] max-sm:hidden lg:hidden">
       <ul className="mx-auto grid h-14 max-w-xl grid-cols-3">
         {TABS.map(({ href, label, icon: Icon, match }) => {
           const active = match(pathname);

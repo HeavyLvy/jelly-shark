@@ -64,9 +64,9 @@ function MovieDetail({ item }: { item: BaseItemDto }) {
       <DetailHero
         item={item}
         meta={[runtime, { node: endsAt, hideOnPhone: true }]}
-        actions={
+        primary={<PlayButton href={watchHref(id)} label={inProgress ? (left ? `Resume · ${left}` : "Resume") : "Play"} />}
+        secondary={
           <>
-            <PlayButton href={watchHref(id)} label={inProgress ? (left ? `Resume · ${left}` : "Resume") : "Play"} />
             <TrailerButton item={item} />
             <WatchedToggle item={item} />
             <AddToListButton item={item} />
@@ -120,9 +120,9 @@ function CollectionDetail({ item }: { item: BaseItemDto }) {
         item={item}
         backdropItem={backdropItem}
         meta={[count ? `${count} ${count === 1 ? "Title" : "Titles"}` : null]}
-        actions={
+        primary={first?.Id ? <PlayButton href={watchHref(first.Id)} label="Play" /> : null}
+        secondary={
           <>
-            {first?.Id && <PlayButton href={watchHref(first.Id)} label="Play" />}
             <AddToListButton item={item} />
             <FavoriteButton item={item} />
           </>

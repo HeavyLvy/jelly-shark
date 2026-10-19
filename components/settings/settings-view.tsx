@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/components/ui/cn";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { Switch } from "@/components/ui/switch";
@@ -46,6 +46,11 @@ function SettingsBody() {
     setPrefs((p) => ({ ...p, ...patch }));
     writeVideoPrefs(patch);
   };
+  // Arriving from Search with #section: the sections only exist once this renders, so scroll now.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (id) document.getElementById(id)?.scrollIntoView({ block: "start" });
+  }, []);
   const langOptions = LANGS.map((c) => ({ value: c, label: langName(c) }));
   const seg = (active: boolean) => cn("h-9 rounded-full px-4 text-sm font-semibold transition", active ? "bg-text text-bg" : "text-text-secondary hover:bg-overlay hover:text-text");
 
@@ -158,7 +163,7 @@ function SettingsBody() {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section aria-label={title} className="mt-10">
+    <section id={title.toLowerCase().replace(/[^a-z0-9]+/g, "-")} aria-label={title} className="mt-10 scroll-mt-28">
       <h2 className="mb-2 font-display text-xl font-bold tracking-tight">{title}</h2>
       <div className="jelly-solid divide-y divide-hairline rounded-panel px-5">{children}</div>
     </section>

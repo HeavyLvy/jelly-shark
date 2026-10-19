@@ -21,6 +21,7 @@ import {
 import { cn } from "@/components/ui/cn";
 import { Spinner } from "@/components/ui/states";
 import { currentTrack, usePlayer } from "@/lib/player/store";
+import { isClickFocused } from "@/lib/click-focus";
 import { LyricsPanel } from "./lyrics-panel";
 import { NowPlayingSheet } from "./now-playing-sheet";
 import { SleepTimerButton } from "./sleep-timer";
@@ -114,7 +115,7 @@ export function PlayerBar() {
   const closeSheet = useCallback(() => setSheetOpen(false), []);
 
   // Keyboard: Space = play/pause, ←/→ = seek 5s, ↑/↓ = volume ±5%. Ignored
-  // while typing, on focused controls that use those keys themselves, or with modifiers.
+  // while typing, on controls that use those keys themselves, or with modifiers.
   useEffect(() => {
     if (!track) return;
     const onKey = (e: KeyboardEvent) => {
@@ -123,7 +124,11 @@ export function PlayerBar() {
       if (target?.closest('input, textarea, select, [contenteditable="true"], [role="slider"], [role="menu"], [role="listbox"], [role="dialog"]')) return;
       const s = usePlayer.getState();
       if (e.key === " " || e.code === "Space") {
-        if (target?.closest("button, a, [role='button'], summary")) return;
+        // Space on a button you reached by keyboard presses that button. A button
+        // you merely clicked keeps focus, and Space must not replay its click.
+        const control = target?.closest<HTMLElement>("button, a, [role='button'], summary");
+        if (control && !isClickFocused(control)) return;
+        control?.blur();
         e.preventDefault();
         s.togglePlay();
       } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
@@ -158,9 +163,9 @@ export function PlayerBar() {
     const ro = new ResizeObserver(measure);
     ro.observe(bar);
     window.addEventListener("resize", measure);
-    // Music's phone tab bar lifts the bar without resizing it.
+    // The phone tab bars lift the bar without resizing it.
     const mo = new MutationObserver(() => requestAnimationFrame(measure));
-    mo.observe(html, { attributes: true, attributeFilter: ["data-music-tabs"] });
+    mo.observe(html, { attributes: true, attributeFilter: ["data-music-tabs", "data-app-tabs"] });
     return () => {
       ro.disconnect();
       mo.disconnect();
@@ -180,8 +185,8 @@ export function PlayerBar() {
   return (
     <>
       {panel === "queue" && <QueuePanel />}
-      {/* Keyed by track: a new track remounts the panel (follow mode + scroll reset). */}
-      {panel === "lyrics" && <LyricsPanel key={track.uid} />}
+      {/* The panel keys its lyrics by track itself, so fullscreen survives song changes. */}
+      {panel === "lyrics" && <LyricsPanel />}
       {sheetOpen && (
         <NowPlayingSheet
           onClose={closeSheet}
@@ -321,7 +326,7 @@ function ClosedToast() {
   }, [closed, dismissClosed]);
   if (!closed) return null;
   return (
-    <div role="status" className="jelly-panel fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-4 rounded-full py-2 pr-2 pl-5 text-sm text-text shadow-lg sm:bottom-6">
+    <div role="status" className="jelly-panel fixed bottom-[calc(var(--tabs-space,0px)+1rem)] left-1/2 z-40 flex -translate-x-1/2 items-center gap-4 rounded-full py-2 pr-2 pl-5 text-sm text-text shadow-lg sm:bottom-6">
       Playback closed
       <button type="button" onClick={undoClose} className="rounded-full px-3 py-1 font-semibold text-accent transition hover:bg-overlay">
         Undo

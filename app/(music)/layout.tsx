@@ -1,9 +1,11 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
+import { PhoneTabBar } from "@/components/nav/pill-nav";
 import { PlayerBar } from "@/components/player/player-bar";
 
 /**
  * Music route group: like the main app shell but without the floating pill
- * nav — the music shell has its own Spotify-style top bar. The audio engine
+ * nav on wider screens — the music shell has its own Spotify-style top bar. Phones
+ * get the main tab bar at the bottom, under Music's own tabs. The audio engine
  * lives in the root layout, so moving between groups never interrupts playback.
  */
 export default function MusicGroupLayout({ children }: { children: ReactNode }) {
@@ -19,6 +21,10 @@ export default function MusicGroupLayout({ children }: { children: ReactNode }) 
         {children}
       </main>
       <PlayerBar />
+      {/* Phones get the main tab bar here too (usePathname needs a Suspense boundary). */}
+      <Suspense fallback={null}>
+        <PhoneTabBar />
+      </Suspense>
     </>
   );
 }

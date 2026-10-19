@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type FocusEvent } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { Pause, Play } from "lucide-react";
@@ -17,7 +18,7 @@ import { useNow } from "@/lib/use-now";
 
 export interface HeroSlide {
   item: BaseItemDto;
-  source: "resume" | "featured";
+  source: "resume" | "newEpisode" | "newRelease" | "featured";
 }
 
 const AUTO_ADVANCE_MS = 8000;
@@ -183,6 +184,13 @@ export function HomeHero({ slides }: { slides: HeroSlide[] }) {
   );
 }
 
+const EYEBROW: Record<HeroSlide["source"], string> = {
+  resume: "Continue watching",
+  newEpisode: "New episode",
+  newRelease: "New in your library",
+  featured: "Featured in your library",
+};
+
 function SlideContent({ slide }: { slide: HeroSlide }) {
   const { item, source } = slide;
   const now = useNow();
@@ -194,14 +202,22 @@ function SlideContent({ slide }: { slide: HeroSlide }) {
   const endsAt = !isSeries && now ? formatEndsAt(remainingTicks(item), now) : null;
   const genres = (item.Genres ?? []).slice(0, 3);
   const year = isSeries ? formatYears(item) : item.ProductionYear;
+  const phone = useIsPhone();
 
   return (
     <>
       <p className="mb-3 flex items-center gap-2 text-[11px] font-bold tracking-[0.14em] text-accent uppercase sm:text-xs">
         <BrandIcon className="size-4" />
-        {source === "resume" ? "Continue watching" : "Featured in your library"}
+        {EYEBROW[source]}
       </p>
-      <TitleTreatment item={item} as="h2" />
+      {/* Phones: the title art opens the full details page (the only button there is Play). */}
+      {phone ? (
+        <Link href={detailHref(item)} className="block rounded-card" aria-label={`More info about ${isEpisode ? item.SeriesName ?? item.Name : item.Name}`}>
+          <TitleTreatment item={item} as="h2" />
+        </Link>
+      ) : (
+        <TitleTreatment item={item} as="h2" />
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-text-secondary">
         {item.OfficialRating && <RatingBadge rating={item.OfficialRating} />}
         {isEpisode && <span className="font-medium text-text">{dotJoin(episodeCode(item), item.Name)}</span>}
@@ -212,11 +228,11 @@ function SlideContent({ slide }: { slide: HeroSlide }) {
       </div>
       {/* Phones: no synopsis or genres (tap More info for those). */}
       {item.Overview && <p className="mt-4 line-clamp-3 max-w-lg text-[15px] leading-relaxed text-text-secondary max-sm:hidden">{item.Overview}</p>}
-      {/* Phones: a wide Play button, then round icon buttons for info, + and ♥, all on one line. */}
-      <div className="mt-6 flex flex-wrap items-center gap-3 max-sm:mt-5 max-sm:flex-nowrap max-sm:gap-2 max-sm:[&>a:first-child]:h-11 max-sm:[&>a:first-child]:min-w-0 max-sm:[&>a:first-child]:flex-1 max-sm:[&_button]:size-11">
+      {/* Phones: just a full-width Play/Resume; everything else lives on the details page. */}
+      <div className="mt-6 flex flex-wrap items-center gap-3 max-sm:mt-5">
         {isSeries ? <SeriesPlay item={item} /> : item.Id && <PlayButton href={watchHref(item.Id)} label={inProgress ? "Resume" : "Play"} />}
-        <MoreInfoButton href={detailHref(item)} compactOnPhone />
-        <div className="flex items-center gap-3 max-sm:gap-2">
+        <div className="flex items-center gap-3 max-sm:hidden">
+          <MoreInfoButton href={detailHref(item)} />
           <AddToListButton item={item} />
           <FavoriteButton item={item} />
         </div>

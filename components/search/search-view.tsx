@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useDeferredValue, useRef, type FormEvent, type MouseEvent } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, type FormEvent, type MouseEvent } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { Search, X } from "lucide-react";
 import { LandscapeCard, LandscapeCardSkeleton, PosterCard, PosterCardSkeleton } from "@/components/media/cards";
@@ -11,22 +11,26 @@ import { TrackTable } from "@/components/music/track-table";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { dotJoin } from "@/lib/format";
-import { isTitleMatch, pickTopResult, useBrowseGenres, useSearchGroup } from "@/lib/queries/search";
+import { isTitleMatch, pickTopResult, useBrowseGenres, useFavoriteItems, usePeopleSearch, useSearchGroup, useWarmSearchIndex } from "@/lib/queries/search";
+import { useMe } from "@/lib/queries/auth";
+import { rankEntries, toEntry } from "@/lib/search-fuzzy";
+import { matchPages } from "@/lib/search-pages";
 import { useArtistAlbums, useArtistTopTracks } from "@/lib/queries/music";
 import { addRecentSearch } from "@/lib/recent-searches";
 import { useUrlSearchQuery } from "@/lib/use-url-search-query";
-import { GenreTiles, RecentSearches, SongList, SongListSkeleton, TopResultCard, TopResultSkeleton } from "./search-bits";
+import { GenreTiles, PageResults, PersonResultCard, RecentSearches, SongList, SongListSkeleton, TopResultCard, TopResultSkeleton } from "./search-bits";
 
-type Filter = "all" | "movies" | "tv" | "music";
+type Filter = "all" | "movies" | "tv" | "music" | "favorites";
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "movies", label: "Movies" },
   { value: "tv", label: "TV Shows" },
   { value: "music", label: "Music" },
+  { value: "favorites", label: "Favorites" },
 ];
 
 function parseFilter(v: string | null): Filter {
-  return v === "movies" || v === "tv" || v === "music" ? v : "all";
+  return v === "movies" || v === "tv" || v === "music" || v === "favorites" ? v : "all";
 }
 
 /** Global search (mockup 05). */
@@ -46,6 +50,12 @@ export function SearchView() {
     window.history.replaceState(null, "", qs ? `/search?${qs}` : "/search");
   };
   const inputRef = useRef<HTMLInputElement>(null);
+  // Typing starts the moment Search opens. Pages stay mounted (hidden) after you leave,
+  // so this runs again each time the page is shown, not just on first load.
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  useWarmSearchIndex(true);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -70,7 +80,6 @@ export function SearchView() {
           <input
             ref={inputRef}
             id="search-input"
-            autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search movies, shows, music…"
@@ -101,7 +110,13 @@ export function SearchView() {
       </div>
 
       <div className="mt-10" onClickCapture={onResultsClick}>
-        {term ? <Results term={term} filter={filter} /> : <EmptySearch onPick={(t) => setQ(t, { immediate: true })} />}
+        {filter === "favorites" ? (
+          <FavoriteResults term={term} />
+        ) : term ? (
+          <Results term={term} filter={filter} />
+        ) : (
+          <EmptySearch onPick={(t) => setQ(t, { immediate: true })} />
+        )}
       </div>
     </div>
   );
@@ -153,6 +168,10 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
   const artists = useSearchGroup("artists", term, big ? 20 : 8, music);
   const albums = useSearchGroup("albums", term, big ? 20 : 8, music);
   const playlists = useSearchGroup("playlists", term, 12, filter === "music");
+  const people = usePeopleSearch(term, 12, filter === "all" || filter === "movies" || filter === "tv");
+  const me = useMe();
+  const isAdmin = !!me.data?.user.isAdministrator && (me.data?.server.isInstanceServer ?? true);
+  const pages = useMemo(() => (filter === "all" ? matchPages(term, isAdmin) : []), [filter, term, isAdmin]);
 
   // Title search alone misses an artist's own songs/albums ("bruno" → Bruno Mars):
   // when the best match is an artist, fold in their popular songs and albums (like Spotify).
@@ -169,9 +188,15 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
   const albumList = mergeById(albums.data, artistAlbums.data);
 
   const enabledGroups =
-    filter === "all" ? [movies, series, episodes, songs, artists, albums] : filter === "movies" ? [movies] : filter === "tv" ? [series, episodes] : [songs, artists, albums, playlists];
+    filter === "all"
+      ? [movies, series, episodes, songs, artists, albums, people]
+      : filter === "movies"
+        ? [movies, people]
+        : filter === "tv"
+          ? [series, episodes, people]
+          : [songs, artists, albums, playlists];
   const loading = enabledGroups.some((g) => g.isPending);
-  const allEmpty = !loading && enabledGroups.every((g) => (g.data?.length ?? 0) === 0) && songList.length + albumList.length === 0;
+  const allEmpty = !loading && pages.length === 0 && enabledGroups.every((g) => (g.data?.length ?? 0) === 0) && songList.length + albumList.length === 0;
   const allFailed = enabledGroups.length > 0 && enabledGroups.every((g) => g.isError);
 
   if (allFailed) return <ErrorState title="Search failed" description="Couldn't reach the server. Try again." className={PAD} />;
@@ -195,12 +220,14 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
       {/* Top result + Songs */}
       {filter !== "movies" && filter !== "tv" && (
         <div className={`mx-auto grid max-w-[110rem] grid-cols-[minmax(0,1fr)] gap-8 ${showSongsBeside ? "xl:grid-cols-2" : ""} ${PAD}`}>
-          <section aria-labelledby="top-result" className="space-y-3">
-            <h2 id="top-result" className="font-display text-xl font-bold tracking-tight sm:text-[22px]">
-              Top result
-            </h2>
-            {top ? <TopResultCard item={top} source={source} /> : loading ? <TopResultSkeleton /> : null}
-          </section>
+          {(top || loading) && (
+            <section aria-labelledby="top-result" className="space-y-3">
+              <h2 id="top-result" className="font-display text-xl font-bold tracking-tight sm:text-[22px]">
+                Top result
+              </h2>
+              {top ? <TopResultCard item={top} source={source} /> : <TopResultSkeleton />}
+            </section>
+          )}
           {showSongsBeside && (
             <section aria-labelledby="songs" className="space-y-3">
               <h2 id="songs" className="font-display text-xl font-bold tracking-tight sm:text-[22px]">
@@ -209,6 +236,12 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
               {songs.isPending ? <SongListSkeleton /> : filter === "music" ? <TrackTable tracks={songList} source={source} showAlbum /> : <SongList songs={songList.slice(0, 4)} source={source} />}
             </section>
           )}
+        </div>
+      )}
+
+      {pages.length > 0 && (
+        <div className={`mx-auto max-w-[110rem] ${PAD}`}>
+          <PageResults pages={pages} />
         </div>
       )}
 
@@ -257,6 +290,17 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
         </MediaRow>
       )}
 
+      {/* People */}
+      {video && (people.data?.length ?? 0) > 0 && (
+        <MediaRow title="People" gapClassName="gap-5">
+          {people.data?.map((p) => (
+            <RowItem key={p.Id}>
+              <PersonResultCard item={p} />
+            </RowItem>
+          ))}
+        </MediaRow>
+      )}
+
       {/* Artists & albums */}
       {music && (artists.isPending || albums.isPending || (artists.data?.length ?? 0) + albumList.length > 0) && (
         <MediaRow title="Artists & Albums">
@@ -290,6 +334,97 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
             </RowItem>
           ))}
         </MediaRow>
+      )}
+    </div>
+  );
+}
+
+/** The Favorites filter: everything the user hearted, narrowed by the search text when there is one. */
+function FavoriteResults({ term }: { term: string }) {
+  const favs = useFavoriteItems();
+  const shown = useMemo(() => {
+    const all = favs.data ?? [];
+    if (!term) return all;
+    const byId = new Map(all.map((i) => [i.Id ?? "", i]));
+    const entries = all.map((i) => toEntry(i.Id ?? "", i.Name, i.Type === "Audio" ? i.Artists?.[0] ?? i.AlbumArtist : i.SeriesName ?? i.AlbumArtist, i.Album));
+    return rankEntries(entries, term, 200).flatMap((e) => byId.get(e.id) ?? []);
+  }, [favs.data, term]);
+
+  if (favs.isError) return <ErrorState title="Couldn't load favorites" description="Couldn't reach the server. Try again." className={PAD} />;
+  if (favs.isPending)
+    return (
+      <div className={`mx-auto max-w-[110rem] ${PAD}`}>
+        <SongListSkeleton rows={6} />
+      </div>
+    );
+  if (shown.length === 0)
+    return term ? (
+      <EmptyState title={`No favorites match “${term}”`} description="Only titles you've hearted show up here." className={PAD} />
+    ) : (
+      <EmptyState title="No favorites yet" description="Tap the heart on a movie, show, album or song and it will show up here." className={PAD} />
+    );
+
+  const of = (...types: string[]) => shown.filter((i) => types.includes(i.Type ?? ""));
+  const movies = of("Movie", "BoxSet");
+  const shows = of("Series");
+  const episodes = of("Episode");
+  const songs = of("Audio");
+  const artists = of("MusicArtist");
+  const albums = of("MusicAlbum");
+  const source = { label: "Favorites", href: "/search?type=favorites" };
+
+  return (
+    <div className="space-y-10">
+      {movies.length > 0 && (
+        <MediaRow title="Favorite movies">
+          {movies.map((m) => (
+            <RowItem key={m.Id}>
+              <PosterCard item={m} />
+            </RowItem>
+          ))}
+        </MediaRow>
+      )}
+      {shows.length > 0 && (
+        <MediaRow title="Favorite shows">
+          {shows.map((m) => (
+            <RowItem key={m.Id}>
+              <PosterCard item={m} />
+            </RowItem>
+          ))}
+        </MediaRow>
+      )}
+      {episodes.length > 0 && (
+        <MediaRow title="Favorite episodes">
+          {episodes.map((m) => (
+            <RowItem key={m.Id}>
+              <LandscapeCard item={m} />
+            </RowItem>
+          ))}
+        </MediaRow>
+      )}
+      {(artists.length > 0 || albums.length > 0) && (
+        <MediaRow title="Favorite artists & albums">
+          {[
+            ...artists.map((a) => (
+              <RowItem key={`ar-${a.Id}`}>
+                <MusicArtistCard item={a} />
+              </RowItem>
+            )),
+            ...albums.map((a) => (
+              <RowItem key={`al-${a.Id}`}>
+                <MusicAlbumCard item={a} subtitle={dotJoin("Album", a.AlbumArtist)} />
+              </RowItem>
+            )),
+          ]}
+        </MediaRow>
+      )}
+      {songs.length > 0 && (
+        <section aria-labelledby="fav-songs" className={`mx-auto max-w-[110rem] space-y-3 ${PAD}`}>
+          <h2 id="fav-songs" className="font-display text-xl font-bold tracking-tight sm:text-[22px]">
+            Liked songs
+          </h2>
+          <TrackTable tracks={songs} source={source} showAlbum />
+        </section>
       )}
     </div>
   );

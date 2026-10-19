@@ -1,5 +1,6 @@
 "use client";
 
+import { isClickFocused } from "@/lib/click-focus";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type Hls from "hls.js";
@@ -425,7 +426,10 @@ function Player({ item }: { item: BaseItemDto }) {
         e.preventDefault();
         toggleFullscreen();
       } else if (k === " " || k === "k") {
-        if (k === " " && t?.closest("button, a")) return;
+        // Keyboard-focused buttons keep Space; a button you only clicked must not replay its click.
+        const control = k === " " ? t?.closest<HTMLElement>("button, a") : null;
+        if (control && !isClickFocused(control)) return;
+        control?.blur();
         e.preventDefault();
         togglePlay();
       } else if (k === "arrowleft" || k === "j") {

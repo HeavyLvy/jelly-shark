@@ -122,7 +122,7 @@ export function SelectMenu<T extends string>({
           role="listbox"
           aria-label={label}
           onKeyDown={onListKey}
-          className="jelly-panel absolute right-0 z-30 mt-2 w-52 rounded-panel p-1.5"
+          className="jelly-panel absolute right-0 z-30 mt-2 max-h-[min(60vh,22rem)] w-52 overflow-y-auto overscroll-contain rounded-panel p-1.5"
         >
           {choices.map((s) => {
             const selected = s.value === value;

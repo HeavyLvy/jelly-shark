@@ -1,19 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
-import { Clock, Pause, Play, X } from "lucide-react";
+import { ArrowUpRight, Clock, Pause, Play, Settings, UserRound, X, Zap } from "lucide-react";
 import { JfImage } from "@/components/media/jf-image";
+import { TrackMenu, TrackMenuBody } from "@/components/music/track-menu";
 import { ArtistLinks, TrackArt } from "@/components/player/track-bits";
 import { cn } from "@/components/ui/cn";
+import { FloatingMenu, type MenuAnchor } from "@/components/ui/floating-menu";
 import { Skeleton } from "@/components/ui/states";
+import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
+import { OPEN_SHORTCUTS } from "@/components/shortcuts-dialog";
 import { dotJoin, formatClock, formatRuntime, formatYears, ticksToSeconds } from "@/lib/format";
 import { pickImage } from "@/lib/jellyfin/images";
 import { fetchTracksFor } from "@/lib/queries/music";
 import { currentTrack, usePlayer, type PlaySource } from "@/lib/player/store";
 import { clearRecentSearches, removeRecentSearch, useRecentSearches, type SearchScope } from "@/lib/recent-searches";
 import { detailHref, watchHref } from "@/lib/routes";
+import type { AppPage } from "@/lib/search-pages";
 
 /* ---------- type labels / links ---------- */
 
@@ -127,7 +132,11 @@ export function SongList({ songs, source }: { songs: BaseItemDto[]; source: Play
   const current = usePlayer(currentTrack);
   const playing = usePlayer((s) => s.playing);
   const { playItems, togglePlay } = usePlayer.getState();
+  // Same right-click / ⋯ menu as every other song list (play next, queue, playlist, like, radio…).
+  const [ctx, setCtx] = useState<{ anchor: MenuAnchor; index: number } | null>(null);
+  const ctxSong = ctx ? songs[ctx.index] : null;
   return (
+    <>
     <ul>
       {songs.map((s, i) => {
         const isCurrent = current?.Id === s.Id;
@@ -135,6 +144,10 @@ export function SongList({ songs, source }: { songs: BaseItemDto[]; source: Play
           <li key={s.Id}>
             <div
               className={cn("group flex cursor-pointer items-center gap-3 rounded-card p-2 transition hover:bg-overlay", isCurrent && "bg-overlay-strong")}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setCtx({ anchor: { x: e.clientX, y: e.clientY }, index: i });
+              }}
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest("a, button")) return;
                 if (isCurrent) togglePlay();
@@ -171,11 +184,18 @@ export function SongList({ songs, source }: { songs: BaseItemDto[]; source: Play
                 </span>
               </span>
               <span className="shrink-0 text-xs text-muted tabular-nums">{formatClock(ticksToSeconds(s.RunTimeTicks))}</span>
+              <TrackMenu tracks={[s]} label={s.Name ?? "song"} />
             </div>
           </li>
         );
       })}
     </ul>
+    {ctx && ctxSong && (
+      <FloatingMenu anchor={ctx.anchor} onClose={() => setCtx(null)} label={ctxSong.Name ?? "song"}>
+        <TrackMenuBody getTracks={() => [ctxSong]} single={ctxSong} onClose={() => setCtx(null)} />
+      </FloatingMenu>
+    )}
+    </>
   );
 }
 
@@ -192,6 +212,73 @@ export function SongListSkeleton({ rows = 4 }: { rows?: number }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/* ---------- pages, settings and people ---------- */
+
+const pillCls = "jelly-control inline-flex h-11 items-center gap-2.5 rounded-full px-4 text-sm font-medium text-text transition";
+
+/** Pages, settings and actions in the app that match the search ("settings", "history", "shortcuts"…). */
+export function PageResults({ pages }: { pages: AppPage[] }) {
+  return (
+    <section aria-labelledby="pages-results" className="space-y-3">
+      <h2 id="pages-results" className="font-display text-xl font-bold tracking-tight sm:text-[22px]">
+        Pages &amp; settings
+      </h2>
+      <ul className="flex flex-wrap gap-2.5">
+        {pages.map((p) => {
+          const Icon = p.kind === "Setting" ? Settings : p.kind === "Action" ? Zap : ArrowUpRight;
+          const body = (
+            <>
+              <Icon className="size-4 shrink-0 text-accent" aria-hidden="true" />
+              <span>{p.label}</span>
+              <span className="text-xs text-muted">{p.kind}</span>
+            </>
+          );
+          return (
+            <li key={p.id}>
+              {p.href ? (
+                <Link href={p.href} className={pillCls}>
+                  {body}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className={pillCls}
+                  onClick={() => window.dispatchEvent(new Event(p.action === "quick-connect" ? OPEN_QUICK_CONNECT : OPEN_SHORTCUTS))}
+                >
+                  {body}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** Round photo + name for a person result. */
+export function PersonResultCard({ item }: { item: BaseItemDto }) {
+  return (
+    <Link href={detailHref(item)} className="group block w-28 rounded-card text-center outline-offset-4">
+      <div className="relative mx-auto size-24 overflow-hidden rounded-full bg-surface ring-1 ring-hairline transition group-hover:ring-hairline-strong">
+        <JfImage
+          image={pickImage(item, "poster")}
+          alt=""
+          sizes="96px"
+          className="absolute inset-0"
+          fallback={
+            <div className="absolute inset-0 flex items-center justify-center bg-surface-raised text-muted">
+              <UserRound className="size-9" aria-hidden="true" />
+            </div>
+          }
+        />
+      </div>
+      <p className="mt-2.5 line-clamp-2 text-sm leading-snug font-medium text-text group-hover:underline">{item.Name}</p>
+      <p className="mt-0.5 text-xs text-muted">Person</p>
+    </Link>
   );
 }
 

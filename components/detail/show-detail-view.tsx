@@ -7,6 +7,7 @@ import { Shuffle } from "lucide-react";
 import { AddToListButton, FavoriteButton, PlayButton } from "@/components/media/hero";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { Skeleton, Spinner } from "@/components/ui/states";
 import { episodeCode, playedPercent } from "@/lib/format";
 import { fetchRandomEpisode, isNotFoundError, useFirstEpisode, useNextUp, useSeasons } from "@/lib/queries/detail";
@@ -62,9 +63,9 @@ function SeriesDetail({ series }: { series: BaseItemDto }) {
       <DetailHero
         item={series}
         meta={[seasonCount ? plural(seasonCount, "Season") : null, episodeCount ? plural(episodeCount, "Episode") : null]}
-        actions={
+        primary={<SeriesPlayButton nextUp={nextUp.data} first={first.data} pending={nextUp.isPending || (!nextUp.data && first.isPending)} />}
+        secondary={
           <>
-            <SeriesPlayButton nextUp={nextUp.data} first={first.data} pending={nextUp.isPending || (!nextUp.data && first.isPending)} />
             <TrailerButton item={series} />
             <ShuffleButton seriesId={seriesId} />
             <AddToListButton item={series} />
@@ -86,7 +87,7 @@ function SeriesDetail({ series }: { series: BaseItemDto }) {
 function SeriesPlayButton({ nextUp, first, pending }: { nextUp: BaseItemDto | null | undefined; first: BaseItemDto | null | undefined; pending: boolean }) {
   const target = nextUp ?? first;
   if (!target?.Id) {
-    if (pending) return <Skeleton className="h-12 w-40" />;
+    if (pending) return <Skeleton className="h-12 w-40 max-sm:w-full" />;
     return null;
   }
   const code = episodeCode(target);
@@ -124,7 +125,7 @@ function ShuffleButton({ seriesId }: { seriesId: string }) {
         disabled={busy}
         aria-describedby={failed ? "shuffle-error" : undefined}
         icon={busy ? <Spinner className="size-4" label="Picking an episode" /> : <Shuffle className="size-4" aria-hidden="true" />}
-        className="max-sm:px-4"
+        className="max-sm:size-12 max-sm:rounded-full max-sm:px-0"
       >
         <span className="sr-only sm:not-sr-only">Shuffle</span>
       </Button>
@@ -136,6 +137,9 @@ function ShuffleButton({ seriesId }: { seriesId: string }) {
     </>
   );
 }
+
+/** More seasons than this collapse the button row into a dropdown. */
+const MAX_SEASON_BUTTONS = 5;
 
 function EpisodesSection({
   seriesId,
@@ -160,6 +164,8 @@ function EpisodesSection({
   const selected = fromParam ?? (nextUpSettled ? fromNextUp ?? firstRegular : undefined);
   const selectedId = selected?.Id ?? null;
 
+  const seasonOptions = list.map((s) => ({ value: s.Id ?? "", label: s.Name ?? `Season ${s.IndexNumber ?? ""}` }));
+
   const select = (seasonId: string) => {
     const qs = new URLSearchParams(searchParams.toString());
     qs.set("season", seasonId);
@@ -175,12 +181,11 @@ function EpisodesSection({
         {seasons.isPending || (list.length > 1 && !selectedId) ? (
           <Skeleton className="h-11 w-48 rounded-full" />
         ) : list.length > 1 && selectedId ? (
-          <SegmentedControl
-            aria-label="Season"
-            segments={list.map((s) => ({ value: s.Id ?? "", label: s.Name ?? `Season ${s.IndexNumber ?? ""}` }))}
-            value={selectedId}
-            onChange={select}
-          />
+          list.length > MAX_SEASON_BUTTONS ? (
+            <SelectMenu value={selectedId} options={seasonOptions} onChange={select} label="Season" />
+          ) : (
+            <SegmentedControl aria-label="Season" segments={seasonOptions} value={selectedId} onChange={select} />
+          )
         ) : list.length === 1 ? (
           <span className="jelly-flat rounded-full px-4 py-2 text-sm font-semibold text-text-secondary">
             {list[0].Name ?? "Season 1"}

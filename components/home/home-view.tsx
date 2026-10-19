@@ -2,7 +2,8 @@
 
 import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { EmptyState } from "@/components/ui/states";
-import { useLatestVideo, useResumeVideos, type Seed } from "@/lib/queries/home";
+import { useLatestVideo, useNextUp, useResumeVideos, type Seed } from "@/lib/queries/home";
+import { useNow } from "@/lib/use-now";
 import { HomeHero, HomeHeroError, HomeHeroSkeleton, type HeroSlide } from "./home-hero";
 import {
   BecauseYouWatchedRow,
@@ -18,23 +19,50 @@ import {
 } from "./home-rows";
 import { useUiPrefs, type HomeRowId } from "@/lib/ui-prefs";
 
-const MAX_SLIDES = 5;
+const MAX_SLIDES = 6;
+/** Slots per kind before leftovers are filled in order, so no kind crowds out the rest. */
+const PER_KIND = 2;
+/** How recent counts as "new". */
+const NEW_DAYS = 14;
 
 function hasBackdrop(item: BaseItemDto): boolean {
   return (item.BackdropImageTags?.length ?? 0) > 0 || (item.ParentBackdropImageTags?.length ?? 0) > 0;
 }
 
-/** Resume items first, topped up with the newest movies/series that have backdrop art. */
-function buildSlides(resume: BaseItemDto[], latest: BaseItemDto[]): HeroSlide[] {
+function isRecent(item: BaseItemDto, now: Date): boolean {
+  const added = item.DateCreated ? Date.parse(item.DateCreated) : NaN;
+  return now.getTime() - added <= NEW_DAYS * 86_400_000;
+}
+
+/**
+ * The hero mixes what you're in the middle of, new episodes of shows you
+ * watch, and new additions to the library. Each kind gets up to PER_KIND
+ * slides first (in that order); anything left over fills the remaining
+ * slots, ending with older library titles so the hero is never empty.
+ */
+function buildSlides(resume: BaseItemDto[], nextUp: BaseItemDto[], latest: BaseItemDto[], now: Date): HeroSlide[] {
   const slides: HeroSlide[] = [];
   const seen = new Set<string>();
   const push = (item: BaseItemDto, source: HeroSlide["source"]) => {
     const key = item.Type === "Episode" && item.SeriesId ? item.SeriesId : item.Id ?? "";
-    if (!key || seen.has(key) || !hasBackdrop(item) || slides.length >= MAX_SLIDES) return;
+    if (!key || seen.has(key) || !hasBackdrop(item) || slides.length >= MAX_SLIDES) return false;
     seen.add(key);
     slides.push({ item, source });
+    return true;
   };
-  resume.forEach((i) => push(i, "resume"));
+  // Next Up is the next unwatched episode of every show you've started, so a recent one is a new episode.
+  const newEpisodes = nextUp.filter((e) => e.Type === "Episode" && isRecent(e, now));
+  const newReleases = latest.filter((i) => isRecent(i, now));
+  const kinds: [BaseItemDto[], HeroSlide["source"]][] = [
+    [resume, "resume"],
+    [newEpisodes, "newEpisode"],
+    [newReleases, "newRelease"],
+  ];
+  for (const [list, source] of kinds) {
+    let taken = 0;
+    for (const item of list) if (taken < PER_KIND && push(item, source)) taken++;
+  }
+  for (const [list, source] of kinds) list.forEach((i) => push(i, source));
   latest.forEach((i) => push(i, "featured"));
   return slides;
 }
@@ -51,12 +79,14 @@ export function HomeView() {
   const show = (id: HomeRowId) => !hiddenRows.includes(id);
   const resume = useResumeVideos();
   const latest = useLatestVideo();
+  const nextUp = useNextUp();
+  const now = useNow();
 
-  // Resume can fail on its own; the hero still works from Latest.
-  const heroPending = resume.isPending || latest.isPending;
+  // Each source can fail on its own; the hero uses what loaded (waiting for all, so slides don't reshuffle after first paint).
+  const heroPending = resume.isPending || latest.isPending || nextUp.isPending || now === null;
   const heroFailed = resume.isError && latest.isError;
-  const slides = heroPending || heroFailed ? [] : buildSlides(resume.data ?? [], latest.data ?? []);
-  const featured = slides.find((s) => s.source === "featured") ?? slides[0];
+  const slides = heroPending || heroFailed || now === null ? [] : buildSlides(resume.data ?? [], nextUp.data ?? [], latest.data ?? [], now);
+  const featured = slides.find((s) => s.source === "featured" || s.source === "newRelease") ?? slides[0];
 
   return (
     <>

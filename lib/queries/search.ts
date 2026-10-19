@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { BaseItemDto, BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
 import { getArtistApi } from "@jellyfin/sdk/lib/utils/api/artist-api";
 import { getGenreApi } from "@jellyfin/sdk/lib/utils/api/genre-api";
@@ -8,6 +9,7 @@ import { getLibraryApi } from "@jellyfin/sdk/lib/utils/api/library-api";
 import { getUserViewApi } from "@jellyfin/sdk/lib/utils/api/user-view-api";
 import { CARD_FIELDS } from "@/lib/jellyfin/fields";
 import { jf } from "@/lib/jellyfin/client";
+import { rankEntries, scoreName, toEntry, type SearchEntry } from "@/lib/search-fuzzy";
 import { useJfQuery } from "./use-jf-query";
 
 /** Result groups the search pages can ask for. */
@@ -45,15 +47,160 @@ async function searchGroup(group: SearchGroup, term: string, limit: number, sign
   );
 }
 
-/** One search group (movies, songs, …). Keeps the previous results while a new term loads. */
+const FULL_FIELDS = [...CARD_FIELDS, "Overview", "ParentId"] as const;
+
+/* ---------- local title index (typo-tolerant matching) ---------- */
+
+/** Libraries bigger than this (per group) skip the local index and rely on Jellyfin's own search. */
+const INDEX_CAP = 40_000;
+const INDEX_PAGE = 5_000;
+
+interface TitleIndex {
+  entries: SearchEntry[];
+}
+
+/** Light-weight list of every title in a group: just enough to match typos and punctuation locally. */
+async function buildIndex(group: SearchGroup, signal: AbortSignal): Promise<TitleIndex> {
+  const entries: SearchEntry[] = [];
+  for (let start = 0; start < INDEX_CAP; ) {
+    const page =
+      group === "artists"
+        ? (await getArtistApi(jf).getArtists({ startIndex: start, limit: INDEX_PAGE, enableImages: false, enableUserData: false, enableTotalRecordCount: true }, { signal })).data
+        : (
+            await getLibraryApi(jf).getItems(
+              {
+                includeItemTypes: GROUP_TYPES[group],
+                recursive: true,
+                startIndex: start,
+                limit: INDEX_PAGE,
+                enableImages: false,
+                enableUserData: false,
+                enableTotalRecordCount: true,
+              },
+              { signal },
+            )
+          ).data;
+    const items = page.Items ?? [];
+    for (const it of items) {
+      if (!it.Id) continue;
+      const primary = group === "songs" ? it.Artists?.[0] ?? it.AlbumArtist : group === "episodes" ? it.SeriesName : group === "albums" ? it.AlbumArtist : null;
+      entries.push(toEntry(it.Id, it.Name, primary, group === "songs" ? it.Album : null));
+    }
+    start += items.length;
+    if (items.length === 0 || start >= (page.TotalRecordCount ?? 0)) break;
+  }
+  return { entries };
+}
+
+/** Every title of one group, fetched once and kept for a while. */
+function useTitleIndex(group: SearchGroup, enabled: boolean) {
+  return useJfQuery({
+    queryKey: ["jf", "search-index", group],
+    enabled,
+    staleTime: 10 * 60_000,
+    queryFn: ({ signal }) => buildIndex(group, signal),
+  });
+}
+
+/** Start building the indexes that are cheap, so the first search is already forgiving. */
+export function useWarmSearchIndex(enabled: boolean) {
+  useTitleIndex("movies", enabled);
+  useTitleIndex("series", enabled);
+  useTitleIndex("artists", enabled);
+  useTitleIndex("albums", enabled);
+}
+
+/** Songs and episodes can be tens of thousands of rows, so a search never waits for their index. */
+const BLOCKING: SearchGroup[] = ["movies", "series", "artists", "albums", "playlists"];
+
+async function fetchByIds(ids: string[], signal: AbortSignal): Promise<BaseItemDto[]> {
+  const items = (await getLibraryApi(jf).getItems({ ids, fields: [...FULL_FIELDS], enableTotalRecordCount: false }, { signal })).data.Items ?? [];
+  const order = new Map(ids.map((id, i) => [id, i]));
+  return items.sort((a, b) => (order.get(a.Id ?? "") ?? 0) - (order.get(b.Id ?? "") ?? 0));
+}
+
+/**
+ * One search group (movies, songs, …): the closest title matches from the
+ * local index (ignores case, spaces, symbols and small typos), then whatever
+ * else Jellyfin's own search finds (plot text, people…). Keeps the previous
+ * results while a new term loads.
+ */
 export function useSearchGroup(group: SearchGroup, term: string, limit: number, enabled = true) {
   const q = term.trim();
-  return useJfQuery({
+  const on = enabled && q.length > 0;
+  const server = useJfQuery({
     queryKey: ["jf", "search", group, q.toLowerCase(), limit],
-    enabled: enabled && q.length > 0,
+    enabled: on,
     keepPrevious: true,
     staleTime: 60_000,
     queryFn: ({ signal }) => searchGroup(group, q, limit, signal),
+  });
+  const index = useTitleIndex(group, on);
+  const hitIds = useMemo(() => (on && index.data ? rankEntries(index.data.entries, q, limit).map((e) => e.id) : []), [on, index.data, q, limit]);
+  const hits = useJfQuery({
+    queryKey: ["jf", "search-hits", group, hitIds.join(",")],
+    enabled: hitIds.length > 0,
+    keepPrevious: true,
+    staleTime: 60_000,
+    queryFn: ({ signal }) => fetchByIds(hitIds, signal),
+  });
+
+  const data = useMemo(() => {
+    if (server.data === undefined && hits.data === undefined) return undefined;
+    const seen = new Set<string>();
+    const out: BaseItemDto[] = [];
+    // Hits belong to the current term only: placeholder data from an older term must not leak in.
+    const fresh = hitIds.length > 0 ? hits.data?.filter((h) => h.Id && hitIds.includes(h.Id)) : [];
+    for (const it of [...(fresh ?? []), ...(server.data ?? [])]) {
+      if (!it.Id || seen.has(it.Id)) continue;
+      seen.add(it.Id);
+      out.push(it);
+    }
+    return out.slice(0, limit);
+  }, [server.data, hits.data, hitIds, limit]);
+
+  const waitingOnIndex = on && BLOCKING.includes(group) && index.isPending;
+  const waitingOnHits = hitIds.length > 0 && hits.data === undefined && !hits.isError;
+  return {
+    data,
+    isPending: server.isPending || waitingOnIndex || waitingOnHits,
+    isError: server.isError,
+  };
+}
+
+/** People (actors, directors…) whose name matches. Jellyfin's own search only. */
+export function usePeopleSearch(term: string, limit: number, enabled = true) {
+  const q = term.trim();
+  return useJfQuery({
+    queryKey: ["jf", "search-people", q.toLowerCase(), limit],
+    enabled: enabled && q.length > 0,
+    keepPrevious: true,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) =>
+      (await getLibraryApi(jf).getItems({ searchTerm: q, recursive: true, includeItemTypes: ["Person"], limit, enableTotalRecordCount: false }, { signal })).data.Items ?? [],
+  });
+}
+
+/** Everything the user has marked as a favorite (capped), for the Favorites filter. */
+export function useFavoriteItems(enabled = true) {
+  return useJfQuery({
+    queryKey: ["jf", "favorites", "all"],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async ({ signal }) =>
+      (
+        await getLibraryApi(jf).getItems(
+          {
+            filters: ["IsFavorite"],
+            recursive: true,
+            includeItemTypes: ["Movie", "Series", "Episode", "Audio", "MusicAlbum", "MusicArtist", "BoxSet"],
+            fields: [...FULL_FIELDS],
+            limit: 500,
+            enableTotalRecordCount: false,
+          },
+          { signal },
+        )
+      ).data.Items ?? [],
   });
 }
 
@@ -121,20 +268,9 @@ export async function fetchGenreTracks(genre: BaseItemDto, limit = 80): Promise<
 
 /* ---------- top result ---------- */
 
-function matchScore(name: string | null | undefined, term: string): number {
-  const n = (name ?? "").toLowerCase();
-  const t = term.toLowerCase().trim();
-  if (!n || !t) return 0;
-  if (n === t) return 4;
-  if (n.startsWith(t)) return 3;
-  if (n.split(/[\s\-–:(),.]+/).some((w) => w.startsWith(t))) return 2;
-  if (n.includes(t)) return 1;
-  return 0;
-}
-
-/** True when the item's name contains the term (vs. matching on other metadata). */
+/** True when the item's name matches the term (vs. matching on other metadata). */
 export function isTitleMatch(item: BaseItemDto, term: string): boolean {
-  return matchScore(item.Name, term) > 0;
+  return scoreName(item.Name, term) > 0;
 }
 
 /**
@@ -146,7 +282,7 @@ export function pickTopResult(term: string, groups: (BaseItemDto[] | undefined)[
   let bestScore = 0;
   for (const list of groups) {
     for (const item of list ?? []) {
-      const s = matchScore(item.Name, term);
+      const s = scoreName(item.Name, term);
       if (s > bestScore) {
         best = item;
         bestScore = s;

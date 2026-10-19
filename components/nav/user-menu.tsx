@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, History, Keyboard, LogOut, Settings, Smartphone, UserPlus } from "lucide-react";
@@ -14,8 +14,11 @@ import { avatarUrl, useLogout, useMe, useSwitchAccount } from "@/lib/queries/aut
 const itemClass =
   "flex w-full items-center gap-3 rounded-card px-3 py-2 text-left text-sm transition hover:bg-overlay focus-visible:bg-overlay aria-disabled:opacity-50";
 
-/** Avatar/name button with profile switching, add profile, and sign out. */
-export function UserMenu() {
+/**
+ * Avatar/name button with profile switching, add profile, and sign out.
+ * `floating` is the phone's top-right avatar-only circle (it has no pill around it).
+ */
+export function UserMenu({ floating }: { floating?: boolean } = {}) {
   const me = useMe();
   const switchAccount = useSwitchAccount();
   const logout = useLogout();
@@ -37,9 +40,20 @@ export function UserMenu() {
     const onPointer = (e: PointerEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
+    // Keyboard focus leaving the menu closes it. This must not be an onBlur on
+    // the root: iOS never focuses a tapped button, so tapping an item blurs the
+    // focused one with no relatedTarget, which would unmount the menu before
+    // the click lands.
+    const onFocusIn = (e: FocusEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
     document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("focusin", onFocusIn);
     menuRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
-    return () => document.removeEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("focusin", onFocusIn);
+    };
   }, [open]);
 
   const onMenuKeyDown = (e: KeyboardEvent) => {
@@ -61,10 +75,6 @@ export function UserMenu() {
     items[next]?.focus();
   };
 
-  const onBlur = (e: FocusEvent) => {
-    if (!rootRef.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
-  };
-
   // Full reload: pages kept alive by <Activity> and client stores hold
   // per-user state, so a clean document is the safest identity switch.
   const afterIdentityChange = () => {
@@ -77,7 +87,7 @@ export function UserMenu() {
   const error = switchAccount.error ?? logout.error;
 
   return (
-    <div ref={rootRef} className="relative" onBlur={onBlur}>
+    <div ref={rootRef} className="relative">
       <button
         ref={buttonRef}
         type="button"
@@ -92,15 +102,22 @@ export function UserMenu() {
             setOpen(true);
           }
         }}
-        className="flex h-9 items-center gap-2 rounded-full pr-2.5 pl-1 text-sm font-medium text-text-secondary transition hover:bg-overlay hover:text-text"
+        className={cn(
+          "flex items-center rounded-full text-sm font-medium text-text-secondary transition hover:bg-overlay hover:text-text",
+          floating ? "jelly-shell relative size-11 justify-center" : "h-9 gap-2 pr-2.5 pl-1",
+        )}
       >
         <Avatar
           name={name || "?"}
           src={user ? avatarUrl({ userId: user.id, primaryImageTag: user.primaryImageTag }) : null}
-          size={28}
+          size={floating ? 34 : 28}
         />
-        <span className="hidden max-w-28 truncate sm:inline">{name}</span>
-        <ChevronDown className="size-4" aria-hidden="true" />
+        {!floating && (
+          <>
+            <span className="hidden max-w-28 truncate sm:inline">{name}</span>
+            <ChevronDown className="size-4" aria-hidden="true" />
+          </>
+        )}
       </button>
 
       {open && (

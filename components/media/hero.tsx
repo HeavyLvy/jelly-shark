@@ -74,22 +74,18 @@ function FailNotifier({ onFail }: { onFail: () => void }) {
 
 export function PlayButton({ href, label, size = "lg" }: { href: string; label: string; size?: "md" | "lg" }) {
   return (
-    <Link href={href} className={buttonClasses({ variant: "primary", size, shape: "card", className: "min-w-32" })}>
+    <Link href={href} className={buttonClasses({ variant: "primary", size, shape: "card", className: "min-w-32 max-sm:w-full" })}>
       <Play className="size-4 fill-current" aria-hidden="true" />
       {label}
     </Link>
   );
 }
 
-export function MoreInfoButton({ href, size = "lg", compactOnPhone }: { href: string; size?: "md" | "lg"; compactOnPhone?: boolean }) {
+export function MoreInfoButton({ href, size = "lg" }: { href: string; size?: "md" | "lg" }) {
   return (
-    <Link
-      href={href}
-      aria-label={compactOnPhone ? "More info" : undefined}
-      className={buttonClasses({ variant: "secondary", size, shape: "card", className: compactOnPhone ? "max-sm:size-11 max-sm:rounded-full max-sm:px-0" : undefined })}
-    >
-      <Info className={cn("size-4", compactOnPhone && "max-sm:size-5")} aria-hidden="true" />
-      <span className={compactOnPhone ? "max-sm:sr-only" : undefined}>More info</span>
+    <Link href={href} className={buttonClasses({ variant: "secondary", size, shape: "card" })}>
+      <Info className="size-4" aria-hidden="true" />
+      More info
     </Link>
   );
 }

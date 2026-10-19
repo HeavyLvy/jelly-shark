@@ -34,7 +34,7 @@ function useLocalTrailers(item: BaseItemDto) {
 export function TrailerButton({ item }: { item: BaseItemDto }) {
   const local = useLocalTrailers(item);
   const remote = item.RemoteTrailers?.find((t) => t.Url)?.Url;
-  const cls = buttonClasses({ variant: "secondary", size: "lg", shape: "card", className: "max-sm:size-11 max-sm:rounded-full max-sm:px-0" });
+  const cls = buttonClasses({ variant: "secondary", size: "lg", shape: "card", className: "max-sm:size-12 max-sm:rounded-full max-sm:px-0" });
   const body = (
     <>
       <Clapperboard className="size-4 max-sm:size-5" aria-hidden="true" />

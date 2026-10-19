@@ -6,6 +6,7 @@ import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { UserRound } from "lucide-react";
 import { PosterCard, PosterCardSkeleton } from "@/components/media/cards";
 import { JfImage } from "@/components/media/jf-image";
+import { MobileBackButton } from "@/components/nav/mobile-back-button";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { dotJoin, formatYears, typeLabel } from "@/lib/format";
@@ -37,6 +38,7 @@ export function PersonView() {
   if (person.isError || !person.data) {
     return (
       <div className={`pt-28 ${GUTTER}`}>
+        <MobileBackButton />
         <ErrorState title="Couldn't load this person" action={<Button onClick={() => void person.refetch()}>Try again</Button>} />
       </div>
     );
@@ -48,6 +50,7 @@ export function PersonView() {
 
   return (
     <div className={`pt-28 pb-20 ${GUTTER}`}>
+      <MobileBackButton />
       <header className="flex flex-col items-center gap-6 text-center sm:flex-row sm:items-end sm:text-left">
         <div className="relative size-40 shrink-0 overflow-hidden rounded-full bg-surface ring-1 ring-hairline sm:size-48">
           <JfImage
@@ -108,6 +111,7 @@ function Credits({ title, items, pending }: { title: string; items: BaseItemDto[
 export function PersonSkeleton() {
   return (
     <div className={`pt-28 ${GUTTER}`} aria-hidden="true">
+      <MobileBackButton />
       <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-end">
         <Skeleton className="size-40 rounded-full sm:size-48" />
         <div className="space-y-3">

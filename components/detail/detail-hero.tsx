@@ -6,6 +6,7 @@ import type { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { ChevronLeft } from "lucide-react";
 import { CommunityRating, RatingBadge } from "@/components/media/bits";
 import { HeroBackdrop, TitleTreatment } from "@/components/media/hero";
+import { MobileBackButton } from "@/components/nav/mobile-back-button";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { formatRating, formatYears } from "@/lib/format";
@@ -40,7 +41,10 @@ interface DetailHeroProps {
   /** Extra meta entries after the years (runtime, seasons, "Ends at"…). */
   /** Facts after the year. `{ node, hideOnPhone }` drops one on phones (e.g. "Ends at"). */
   meta: (ReactNode | { node: ReactNode; hideOnPhone: true })[];
-  actions: ReactNode;
+  /** The Play button. Full width on phones. */
+  primary: ReactNode;
+  /** Circle/square extras (trailer, watched, playlist, favorite…). A row of circles under Play on phones. */
+  secondary: ReactNode;
   panel: ReactNode;
 }
 
@@ -48,7 +52,7 @@ interface DetailHeroProps {
  * Detail hero: full-bleed backdrop, back link, huge title, meta row,
  * overview and actions on the left; floating info card on the right.
  */
-export function DetailHero({ item, backdropItem, meta, actions, panel }: DetailHeroProps) {
+export function DetailHero({ item, backdropItem, meta, primary, secondary, panel }: DetailHeroProps) {
   const back = backLinkFor(item);
   const years = formatYears(item);
   const rating = formatRating(item.CommunityRating);
@@ -63,9 +67,10 @@ export function DetailHero({ item, backdropItem, meta, actions, panel }: DetailH
       </HeroBackdrop>
       <div className={`relative flex flex-col gap-8 pt-28 pb-10 ${hasBackdrop ? "min-h-[560px] lg:min-h-[640px]" : "lg:pt-36"} lg:flex-row lg:items-end lg:justify-between lg:gap-12 ${GUTTER}`}>
         <div className="flex max-w-2xl min-w-0 flex-1 flex-col justify-end lg:self-stretch">
+          <MobileBackButton href={back.href} label={`Back to ${back.label}`} />
           <Link
             href={back.href}
-            className="mb-5 inline-flex w-fit items-center gap-1 rounded-full text-sm text-text-secondary transition hover:text-text"
+            className="mb-5 inline-flex w-fit items-center gap-1 rounded-full text-sm text-text-secondary transition hover:text-text max-sm:hidden"
           >
             <ChevronLeft className="size-4" aria-hidden="true" />
             {back.label}
@@ -96,7 +101,10 @@ export function DetailHero({ item, backdropItem, meta, actions, panel }: DetailH
           </ul>
           {tagline && !item.Overview && <p className="mt-4 text-base text-text-secondary italic">{tagline}</p>}
           {item.Overview && <Synopsis text={item.Overview} />}
-          <div className="mt-6 flex flex-wrap items-center gap-2.5 sm:gap-3">{actions}</div>
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <div className="flex items-center gap-3 max-sm:[&>*]:w-full">{primary}</div>
+            <div className="flex flex-wrap items-center gap-2.5 max-sm:justify-evenly sm:gap-3">{secondary}</div>
+          </div>
         </div>
         {panel && <div className="w-full lg:w-[23rem] lg:shrink-0">{panel}</div>}
       </div>
@@ -127,7 +135,7 @@ export function DetailSkeleton({ variant }: { variant: "movie" | "show" }) {
       <span className="sr-only">Loading title…</span>
       <div className={`flex min-h-[560px] flex-col gap-8 pt-28 pb-10 lg:min-h-[640px] lg:flex-row lg:items-end lg:justify-between ${GUTTER}`}>
         <div className="flex max-w-2xl flex-1 flex-col justify-end lg:self-stretch">
-          <Skeleton className="mb-5 h-4 w-24" />
+          <Skeleton className="mb-5 h-4 w-24 max-sm:hidden" />
           <Skeleton className="h-16 w-4/5 sm:h-20" />
           <Skeleton className="mt-3 h-16 w-1/2 sm:h-20" />
           <Skeleton className="mt-5 h-4 w-72 max-w-full" />

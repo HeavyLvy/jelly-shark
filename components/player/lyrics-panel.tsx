@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AxiosError } from "axios";
-import { LocateFixed, X } from "lucide-react";
+import { Expand, LocateFixed, Maximize2, Minimize2, Pause, Play, Shrink, SkipBack, SkipForward, X } from "lucide-react";
 import type { LyricDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { getLyricApi } from "@jellyfin/sdk/lib/utils/api/lyric-api";
 import { cn } from "@/components/ui/cn";
@@ -11,6 +11,8 @@ import { TICKS_PER_SECOND } from "@/lib/format";
 import { jf } from "@/lib/jellyfin/client";
 import { useJfQuery } from "@/lib/queries/use-jf-query";
 import { artColor } from "@/lib/player/art-color";
+import { exitLyricsFullscreen, setLyricsMode, useLyricsMode, type LyricsMode } from "@/lib/player/lyrics-view";
+import { SeekBar } from "./seek-bar";
 import { currentTrack, usePlayer } from "@/lib/player/store";
 
 /**
@@ -104,7 +106,11 @@ function lineAt(lines: Line[], t: number): number {
  * report so a stall can't run ahead). Only re-renders when the line changes.
  */
 function useActiveLine(lines: Line[], enabled: boolean) {
-  const [active, setActive] = useState(-1);
+  // Starts on the line playing right now (not -1), so opening the panel mid-song
+  // centres there at once instead of centring line 0 and then gliding to the real line.
+  const [state, setState] = useState(() => ({ lines, idx: lineAt(lines, usePlayer.getState().currentTime) }));
+  if (state.lines !== lines) setState({ lines, idx: lineAt(lines, usePlayer.getState().currentTime) });
+  const active = state.lines === lines ? state.idx : lineAt(lines, usePlayer.getState().currentTime);
   const clock = useRef({ t: 0, at: 0, playing: false });
 
   useEffect(() => {
@@ -122,7 +128,7 @@ function useActiveLine(lines: Line[], enabled: boolean) {
       const c = clock.current;
       const t = c.playing ? c.t + Math.min(1, (performance.now() - c.at) / 1000) : c.t;
       const idx = lineAt(lines, t);
-      setActive((prev) => (prev === idx ? prev : idx));
+      setState((prev) => (prev.lines === lines && prev.idx === idx ? prev : { lines, idx }));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -141,10 +147,11 @@ function useActiveLine(lines: Line[], enabled: boolean) {
   return { active: enabled ? active : -1, now };
 }
 
-export function LyricsPanel() {
+/** Lyrics text for the current track. Remounted per track (follow mode and scroll start fresh). */
+function LyricsBody({ mode }: { mode: LyricsMode }) {
   const track = usePlayer(currentTrack);
   const playing = usePlayer((s) => s.playing);
-  const { setPanel, seek, setPlaying } = usePlayer.getState();
+  const { seek, setPlaying } = usePlayer.getState();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLElement | null)[]>([]);
   const [follow, setFollow] = useState(true);
@@ -173,16 +180,15 @@ export function LyricsPanel() {
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
-  const tint = useMemo(() => artColor(track), [track]);
 
   /** Centre a line (ours, so it never counts as the user scrolling). */
-  const centreLine = useCallback((index: number) => {
+  const centreLine = useCallback((index: number, instant = false) => {
     const scroller = scrollerRef.current;
     const el = lineRefs.current[index];
     if (!scroller || !el) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const top = el.offsetTop - scroller.clientHeight / 2 + el.offsetHeight / 2;
-    scroller.scrollTo({ top, behavior: firstScroll.current || reduce ? "auto" : "smooth" });
+    scroller.scrollTo({ top, behavior: instant || firstScroll.current || reduce ? "auto" : "smooth" });
     firstScroll.current = false;
   }, []);
 
@@ -254,40 +260,33 @@ export function LyricsPanel() {
     setFollow(true);
   };
 
+  // Resizing (changing mode, entering fullscreen, rotating) moves the lines: keep the current one centred.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPanel("lyrics");
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [setPanel]);
+    const el = scrollerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (follow && synced && lines.length) centreLine(Math.max(0, activeRef.current), true);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [follow, synced, lines.length, centreLine]);
 
   const empty = lyrics.data === null || (lyrics.data && lines.length === 0);
 
   return (
-    <aside
-      aria-label="Lyrics"
-      style={tint ? { backgroundColor: tint } : undefined}
-      className="jelly-panel fixed inset-x-0 top-20 bottom-[calc(var(--player-space)+0.5rem)] z-40 mx-auto flex w-[min(72rem,calc(100vw-1rem))] flex-col rounded-panel transition-[background-color] duration-700"
-    >
-      <header className="flex items-start justify-between gap-3 px-6 pt-5 pb-3">
-        <div className="min-w-0">
-          <h2 className="font-display text-xl font-bold">Lyrics</h2>
-          <p className="truncate text-sm text-text-secondary">{track ? `${track.Name} · ${track.Artists?.join(", ") || track.AlbumArtist || ""}` : ""}</p>
-        </div>
-        <button type="button" aria-label="Close lyrics" onClick={() => setPanel("lyrics")} className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-overlay hover:text-text">
-          <X className="size-4" aria-hidden="true" />
-        </button>
-      </header>
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={scrollerRef} onScroll={onScroll} tabIndex={-1} className="relative min-h-0 flex-1 overflow-y-auto px-6 outline-none scrollbar-thin">
         {lyrics.isPending && <Spinner className="m-6 size-6" label="Loading lyrics" />}
         {lyrics.isError && <ErrorState title="Couldn't load lyrics" action={<button type="button" className="text-accent" onClick={() => void lyrics.refetch()}>Retry</button>} />}
         {empty ? <EmptyState title="No lyrics for this track" /> : null}
         {lines.length > 0 && !synced && <p className="mx-auto max-w-4xl pt-2 text-center text-sm text-text-secondary">These lyrics aren&apos;t synced to the song yet.</p>}
         {lines.length > 0 && (
-          <ol className={cn("mx-auto max-w-4xl space-y-5 text-center", synced ? "py-[40vh]" : "py-8")}>
+          <ol className={cn("mx-auto text-center", mode === "panel" ? "max-w-4xl space-y-5" : mode === "expanded" ? "max-w-6xl space-y-7" : "max-w-7xl space-y-9", synced ? "py-[40vh]" : "py-8")}>
             {lines.map((line, i) => {
               const state = !synced ? "plain" : i < active ? "past" : i === active ? "active" : "future";
               const lineCls = cn(
-                "font-display text-[1.75rem] leading-snug font-bold tracking-tight transition-colors duration-300 sm:text-4xl",
+                "font-display leading-snug font-bold tracking-tight transition-colors duration-300",
+                mode === "panel" ? "text-[1.75rem] sm:text-4xl" : mode === "expanded" ? "text-3xl sm:text-5xl lg:text-6xl" : "text-4xl sm:text-6xl xl:text-7xl",
                 state === "future" ? "text-text/40 hover:text-text" : "text-text",
               );
               return (
@@ -314,7 +313,7 @@ export function LyricsPanel() {
                       )}
                     </button>
                   ) : (
-                    <p className={lineCls}>{line.text || " "}</p>
+                    <p className={lineCls}>{line.text || " "}</p>
                   )}
                 </li>
               );
@@ -326,10 +325,172 @@ export function LyricsPanel() {
         <button
           type="button"
           onClick={resync}
-          className="jelly-control absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-text"
+          className={cn("jelly-control absolute left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-text", mode === "fullscreen" ? "bottom-40" : "bottom-4")}
         >
           <LocateFixed className="size-4" aria-hidden="true" /> Sync
         </button>
+      )}
+    </div>
+  );
+}
+
+const iconBtn = "inline-flex size-9 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-overlay hover:text-text";
+
+/**
+ * The lyrics frame: title and view controls around the (per-track) lyrics.
+ * Stays mounted across tracks so browser fullscreen isn't dropped at every
+ * song change. See lib/player/lyrics-view.ts for the three modes.
+ */
+export function LyricsPanel() {
+  const track = usePlayer(currentTrack);
+  const playing = usePlayer((s) => s.playing);
+  const buffering = usePlayer((s) => s.buffering);
+  const { setPanel, togglePlay, next, prev } = usePlayer.getState();
+  const mode = useLyricsMode();
+  const frameRef = useRef<HTMLElement>(null);
+  /** Fullscreen: controls fade out after a few seconds without input. */
+  const [awake, setAwake] = useState(true);
+  const tint = useMemo(() => artColor(track), [track]);
+  const solid = mode !== "panel";
+  const full = mode === "fullscreen";
+
+  // Browser fullscreen follows the mode. Without the API (iPhone) the cover
+  // still fills the page, so the mode works either way.
+  const browserFullscreen = useRef(false);
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    if (full) {
+      if (document.fullscreenEnabled && !document.fullscreenElement) {
+        el.requestFullscreen().then(
+          () => void (browserFullscreen.current = true),
+          () => void (browserFullscreen.current = false),
+        );
+      }
+    } else if (document.fullscreenElement === el) {
+      browserFullscreen.current = false;
+      void document.exitFullscreen();
+    }
+  }, [full]);
+  // Esc (or the browser's own exit) leaves browser fullscreen: step back a mode too.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement && browserFullscreen.current) {
+        browserFullscreen.current = false;
+        exitLyricsFullscreen();
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  // Closing the panel from fullscreen must not leave it armed to reopen fullscreen.
+  useEffect(() => () => exitLyricsFullscreen(), []);
+
+  // Esc steps back: fullscreen → where it came from → panel → closed.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (mode === "fullscreen") exitLyricsFullscreen();
+      else if (mode === "expanded") setLyricsMode("panel");
+      else setPanel("lyrics");
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mode, setPanel]);
+
+  // Fullscreen: wake the controls on any input, hide them after 3 s of none.
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!full || !el) return;
+    let timer = window.setTimeout(() => setAwake(false), 3000);
+    const wake = () => {
+      setAwake(true);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setAwake(false), 3000);
+    };
+    const events = ["pointermove", "pointerdown", "keydown", "touchstart"] as const;
+    events.forEach((n) => el.addEventListener(n, wake, { passive: true }));
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((n) => el.removeEventListener(n, wake));
+    };
+  }, [full]);
+  const hidden = full && !awake;
+
+  const enterFullscreen = () => {
+    setAwake(true);
+    setLyricsMode("fullscreen");
+  };
+
+  return (
+    <aside
+      ref={frameRef}
+      aria-label="Lyrics"
+      style={tint ? (solid ? { backgroundColor: "var(--color-bg)", backgroundImage: `linear-gradient(${tint}, ${tint})` } : { backgroundColor: tint }) : undefined}
+      className={cn(
+        "flex flex-col transition-[background-color] duration-700",
+        mode === "panel" && "jelly-panel fixed inset-x-0 top-20 bottom-[calc(var(--player-space)+0.5rem)] z-40 mx-auto w-[min(72rem,calc(100vw-1rem))] rounded-panel",
+        mode === "expanded" && "fixed inset-x-0 top-[4.5rem] bottom-[calc(var(--player-space)+0.5rem)] z-40 border-t border-hairline",
+        full && "fixed inset-0 z-[100]",
+        solid && !tint && "bg-bg",
+        hidden && "cursor-none",
+      )}
+    >
+      <header
+        className={cn(
+          "flex items-start justify-between gap-3 px-6 pt-5 pb-3 transition-opacity duration-500",
+          full && "pt-[max(1.25rem,env(safe-area-inset-top))]",
+          hidden && "pointer-events-none opacity-0",
+        )}
+      >
+        <div className="min-w-0">
+          <h2 className="font-display text-xl font-bold">{full ? track?.Name : "Lyrics"}</h2>
+          <p className="truncate text-sm text-text-secondary">{full ? track?.Artists?.join(", ") || track?.AlbumArtist || "" : track ? `${track.Name} · ${track.Artists?.join(", ") || track.AlbumArtist || ""}` : ""}</p>
+        </div>
+        <div className="flex items-center gap-1">
+          {!full && (
+            <button
+              type="button"
+              aria-label={mode === "expanded" ? "Shrink lyrics" : "Expand lyrics"}
+              onClick={() => setLyricsMode(mode === "expanded" ? "panel" : "expanded")}
+              className={iconBtn}
+            >
+              {mode === "expanded" ? <Minimize2 className="size-4" aria-hidden="true" /> : <Maximize2 className="size-4" aria-hidden="true" />}
+            </button>
+          )}
+          <button type="button" aria-label={full ? "Exit full screen" : "Full screen lyrics"} onClick={() => (full ? exitLyricsFullscreen() : enterFullscreen())} className={iconBtn}>
+            {full ? <Shrink className="size-4" aria-hidden="true" /> : <Expand className="size-4" aria-hidden="true" />}
+          </button>
+          {!full && (
+            <button type="button" aria-label="Close lyrics" onClick={() => setPanel("lyrics")} className={iconBtn}>
+              <X className="size-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </header>
+      <LyricsBody key={track?.uid} mode={mode} />
+      {full && (
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 bg-linear-to-t from-black/60 to-transparent px-6 pt-12 pb-[max(1.5rem,env(safe-area-inset-bottom))] transition-opacity duration-500 *:pointer-events-auto",
+            hidden && "opacity-0 *:pointer-events-none",
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={prev} aria-label="Previous track" className={iconBtn}>
+              <SkipBack className="size-5 fill-current" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"} className="inline-flex size-12 items-center justify-center rounded-full bg-text text-bg transition hover:scale-105">
+              {buffering && playing ? <Spinner className="size-5 border-bg/30 border-t-bg" label="Loading" /> : playing ? <Pause className="size-5 fill-current" aria-hidden="true" /> : <Play className="size-5 translate-x-px fill-current" aria-hidden="true" />}
+            </button>
+            <button type="button" onClick={() => next()} aria-label="Next track" className={iconBtn}>
+              <SkipForward className="size-5 fill-current" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="w-full max-w-2xl">
+            <SeekBar />
+          </div>
+        </div>
       )}
     </aside>
   );

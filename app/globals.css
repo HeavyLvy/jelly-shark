@@ -232,10 +232,20 @@
 :root {
   --player-space: 0px;
 }
-/* Height of Music's phone/tablet tab bar (shown below lg); the player bar floats above it. */
+/* Height of the bottom bar the music player bar floats above (--tabs-space):
+   Music's own tab bar on tablets (sm to lg), or the main pill on phones (below sm,
+   pill-nav.tsx), which replaces Music's tabs there. */
 @media (width < 64rem) {
   html[data-music-tabs] {
     --tabs-space: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+}
+@media (width < 40rem) {
+  html[data-app-tabs] {
+    --tabs-space: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+  html[data-app-tabs] #main {
+    padding-bottom: var(--tabs-space);
   }
 }
 html[data-player] #main {

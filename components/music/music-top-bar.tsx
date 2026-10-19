@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
-import { Clapperboard, Folders, Home, Search, Tv } from "lucide-react";
+import { Clapperboard, Folders, Home, LibraryBig, Search, Tv } from "lucide-react";
 import { UserMenu } from "@/components/nav/user-menu";
 import { cn } from "@/components/ui/cn";
 import { FloatingMenu, type MenuAnchor } from "@/components/ui/floating-menu";
 import { BrandIcon, useBrandName } from "@/components/ui/brand-icon";
 import { addRecentSearch } from "@/lib/recent-searches";
 import { useUrlSearchQuery } from "@/lib/use-url-search-query";
+import { HomeFilled } from "@/components/ui/home-filled";
 import { menuItemCls } from "./track-menu";
 
 /**
@@ -24,6 +25,7 @@ export function MusicTopBar() {
   const logoRef = useRef<HTMLButtonElement>(null);
   const { query, setQuery, flush, onPage: onSearch } = useUrlSearchQuery("/music/search");
   const onMusicHome = pathname === "/music";
+  const onMusicLibrary = pathname.startsWith("/music/library");
 
   /** Search-as-you-type: results live at /music/search?q= (see useUrlSearchQuery). */
   const onType = (value: string) => setQuery(value);
@@ -85,6 +87,15 @@ export function MusicTopBar() {
         >
           {onMusicHome ? <HomeFilled className="size-5" /> : <Home className="size-5" aria-hidden="true" />}
         </Link>
+        {/* Phones: Music's own tab bar is hidden (the main tab bar is enough), so Your Library lives here. */}
+        <Link
+          href="/music/library"
+          aria-label="Your Library"
+          aria-current={onMusicLibrary ? "page" : undefined}
+          className={cn("jelly-control flex size-12 shrink-0 items-center justify-center rounded-full transition sm:hidden", onMusicLibrary ? "text-text" : "text-text-secondary hover:text-text")}
+        >
+          <LibraryBig className={cn("size-5", onMusicLibrary && "stroke-[2.5]")} aria-hidden="true" />
+        </Link>
         <form role="search" onSubmit={submit} className="jelly-control flex h-12 w-full max-w-[29rem] items-center gap-3 rounded-full px-4 focus-within:ring-2 focus-within:ring-accent">
           <Search className="size-5 shrink-0 text-muted" aria-hidden="true" />
           <label htmlFor="music-search" className="sr-only">
@@ -114,20 +125,5 @@ export function MusicTopBar() {
         <UserMenu />
       </div>
     </header>
-  );
-}
-
-/** Solid house with the door cut out (Spotify's active "home" glyph). */
-function HomeFilled({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        d="M12 3.2 3.6 9.8a1 1 0 0 0-.4.8V20a1 1 0 0 0 1 1h4.6v-6.2a1 1 0 0 1 1-1h4.4a1 1 0 0 1 1 1V21h4.6a1 1 0 0 0 1-1v-9.4a1 1 0 0 0-.4-.8Z"
-      />
-    </svg>
   );
 }
