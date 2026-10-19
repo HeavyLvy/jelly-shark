@@ -8,7 +8,7 @@ function required(name: string): string {
   return value;
 }
 
-/** Jellyfin base URL without a trailing slash, e.g. `http://192.168.1.125:8096`. */
+/** Jellyfin base URL without a trailing slash, e.g. `http://192.168.1.10:8096`. */
 export function jellyfinUrl(): string {
   const raw = required("JELLYFIN_URL").trim().replace(/\/+$/, "");
   let parsed: URL;

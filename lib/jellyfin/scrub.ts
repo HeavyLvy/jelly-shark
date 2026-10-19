@@ -12,7 +12,7 @@ import { JF_PROXY_PREFIX } from "@/lib/constants";
 export interface ScrubContext {
   /** The session token, removed verbatim anywhere it appears (backstop). */
   token: string | undefined;
-  /** JELLYFIN_URL origin, e.g. `http://192.168.1.125:8096`. */
+  /** JELLYFIN_URL origin, e.g. `http://192.168.1.10:8096`. */
   upstreamOrigin: string;
   /** Path prefix of JELLYFIN_URL when Jellyfin runs under a base path (usually ""). */
   upstreamBasePath: string;
