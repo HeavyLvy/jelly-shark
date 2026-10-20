@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import type { UserDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { getAuthenticationApi } from "@jellyfin/sdk/lib/utils/api/authentication-api";
 import { getSystemApi } from "@jellyfin/sdk/lib/utils/api/system-api";
@@ -10,6 +10,8 @@ import { readSession, toPublicAccount } from "@/lib/session";
 
 /** Unauthenticated info for the login page: server name, public users, Quick Connect, remembered accounts. */
 export async function GET() {
+  // Reads JELLYFIN_URL and the settings database, which only exist at request time (not while building the image).
+  await connection();
   const cfg = getServerConfig();
   const serverUrl = await loginServerUrl();
   const api = await serverApi({ serverUrl });

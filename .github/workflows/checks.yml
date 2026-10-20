@@ -1,0 +1,35 @@
+# Checks every push and pull request the way a fresh clone sees the repo:
+# no .env file, so anything that needs JELLYFIN_URL or SESSION_SECRET while
+# *building* (instead of at request time) fails here instead of in the Docker image.
+
+name: checks
+
+on:
+  push:
+    branches: [beta, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: type check
+        run: npx tsc --noEmit
+
+      - name: lint
+        run: npm run lint
+
+      - name: build
+        run: npm run build
