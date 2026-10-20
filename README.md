@@ -66,10 +66,10 @@ It doesn't replace Jellyfin or change your library. It's another way to use the 
    - `SESSION_SECRET`: a long random string that encrypts sign-in cookies. Generate one with
      `openssl rand -base64 48`. Keep it private; changing it signs everyone out.
 
-3. Build and start it:
+3. Start it. This downloads the prebuilt image from GitHub's container registry (no build needed):
 
    ```bash
-   docker compose up -d --build
+   docker compose up -d
    ```
 
 4. Open `http://<this machine's IP>:3100` and sign in with your Jellyfin username and password, or with Quick Connect.
@@ -81,28 +81,20 @@ If something is wrong with the settings, the container stops right away and its 
 
 ```bash
 git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 Your settings and branding are kept in the `jelly-shark-data` Docker volume, so they survive updates. Database
 changes are applied automatically when the new version starts.
 
+### Which image tag
+
+The image is `ghcr.io/heavylvy/jelly-shark`, built for `amd64` and `arm64`. `docker-compose.yml` uses the `beta` tag, the
+newest beta. For a setup that never changes under you, pin an exact version such as `0.1.0-beta.1` instead. There is no
+`latest` tag until the first stable release. Tags and version numbers are explained in [RELEASING.md](RELEASING.md).
+
 ### Without Compose
-
-```bash
-docker build -t jelly-shark .
-docker run -d --name jelly-shark -p 3100:3000 \
-  -e JELLYFIN_URL=http://192.168.1.10:8096 \
-  -e SESSION_SECRET="$(openssl rand -base64 48)" \
-  -v jelly-shark-data:/data \
-  jelly-shark
-```
-
-(Generate the secret once and reuse it. A new secret on every start signs everyone out.)
-
-### Prebuilt image
-
-Every release is also published as a container image for `amd64` and `arm64`, so you can skip building it:
 
 ```bash
 docker run -d --name jelly-shark -p 3100:3000 \
@@ -112,8 +104,19 @@ docker run -d --name jelly-shark -p 3100:3000 \
   ghcr.io/heavylvy/jelly-shark:beta
 ```
 
-While Jelly Shark is in beta, use the `beta` tag (the newest beta) or an exact version such as `0.1.0-beta.1`. There is
-no `latest` tag until the first stable release. Version numbers and tags are explained in [RELEASING.md](RELEASING.md).
+(Generate the secret once and reuse it. A new secret on every start signs everyone out.)
+
+### Build the image yourself
+
+You only need this to try your own changes or to set a custom poster size (`NEXT_PUBLIC_POSTER_WIDTH`, which is fixed
+at build time, so the prebuilt image always uses the default of 215). With the repository cloned and `.env` filled in:
+
+```bash
+docker compose up -d --build
+```
+
+Or without Compose: `docker build -t jelly-shark .`, then the `docker run` command above with `jelly-shark` as the last
+line instead of the `ghcr.io/...` image.
 
 ## Install without Docker
 
@@ -140,7 +143,7 @@ All configuration is through environment variables (`.env` for Docker Compose, `
 | --- | --- | --- |
 | `JELLYFIN_URL` | Yes | Default Jellyfin server address, no trailing slash. An administrator can change it later in Settings. |
 | `SESSION_SECRET` | Yes | 32+ random characters used to encrypt sign-in cookies. |
-| `NEXT_PUBLIC_POSTER_WIDTH` | No | Poster width in pixels, 120–400 (default 215). Applied at build time, so rebuild after changing it. |
+| `NEXT_PUBLIC_POSTER_WIDTH` | No | Poster width in pixels, 120–400 (default 215). Fixed when the image is built, so it only applies if you [build the image yourself](#build-the-image-yourself); the prebuilt image uses 215. |
 | `DATABASE_PATH` | No | Where the settings database lives. Default `./data/jelly-shark.db`; the container uses `/data/jelly-shark.db`. |
 
 ### HTTPS and reverse proxies

@@ -1,13 +1,18 @@
-# docker compose up -d --build
+# docker compose up -d
 # Then open http://<this machine>:3100
+#
+# This downloads the prebuilt image. To build it from this source folder instead
+# (your own changes, or a custom poster width): docker compose up -d --build
 services:
   jelly-shark:
+    # Newest beta. Pin an exact version (for example :0.1.0-beta.1) to stay put on updates.
+    image: ghcr.io/heavylvy/jelly-shark:beta
     build:
       context: .
       args:
         # Poster width in px (120-400), baked in at build time. Default 215.
+        # Only used when you build the image yourself; the prebuilt image uses 215.
         NEXT_PUBLIC_POSTER_WIDTH: ${NEXT_PUBLIC_POSTER_WIDTH:-215}
-    image: jelly-shark:latest
     container_name: jelly-shark
     restart: unless-stopped
     ports:

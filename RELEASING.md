@@ -61,6 +61,8 @@ Three places must agree. The release workflow refuses to build if they don't:
 
 5. Publishing the release starts the **release image** workflow (Actions tab). It builds for `amd64` and `arm64` and
    pushes to GitHub's container registry.
+6. At the first stable release (`1.0.0`, or whichever stable version comes first), change the image tag in
+   `docker-compose.yml` and the README from `:beta` to `:latest`, so the install steps stay on the newest stable build.
 
 ## Container image tags
 
