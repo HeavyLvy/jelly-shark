@@ -1,0 +1,151 @@
+# Builds the container image and pushes it to ghcr.io when a release is
+# published. See RELEASING.md for the versioning rules and how to cut one.
+#
+# Image tags (version = the release tag without its leading "v"):
+#   stable      v1.4.2        -> 1.4.2, 1.4, 1, latest   (":1" only from 1.0 on)
+#   pre-release v0.1.0-beta.1 -> 0.1.0-beta.1, beta      (never :latest)
+#   manual run  (workflow_dispatch) -> edge
+#
+# Runs on GitHub's hosted runners (free for public repositories, no
+# self-hosted runner needed). arm64 is built on GitHub's native ARM64 runner,
+# so there is no slow QEMU emulation.
+
+name: release image
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  verify:
+    name: check version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The release tag, package.json and the version sent to Jellyfin must agree,
+      # so an image never ships labelled with a version the code doesn't report.
+      - name: tag matches the code
+        if: github.event_name == 'release'
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::Release tag '$GITHUB_REF_NAME' is not a version like v1.2.3 or v1.2.3-beta.1"; exit 1
+          fi
+          PKG="$(node -p "require('./package.json').version")"
+          CLI="$(sed -n 's/.*CLIENT_VERSION = "\(.*\)";.*/\1/p' lib/constants.ts)"
+          if [[ "$PKG" != "$VER" || "$CLI" != "$VER" ]]; then
+            echo "::error::Version mismatch: tag=$VER package.json=$PKG lib/constants.ts=$CLI"; exit 1
+          fi
+
+  build:
+    name: build ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      # ghcr.io image names must be lowercase; derive it from the repository
+      # so the workflow works unchanged for forks and renamed repos.
+      - name: resolve image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      # better-sqlite3 ships prebuilt binaries and npm ci runs --ignore-scripts,
+      # so no platform-specific source build is needed.
+      - name: build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: export digest
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          docker buildx imagetools inspect "$IMAGE@$digest" > "${{ runner.temp }}/digests/$digest"
+
+      - name: upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: resolve image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: pick tags
+        run: |
+          TAGS=()
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+            TAGS+=("$IMAGE:$VER")
+            if [[ "$VER" == *-* ]]; then
+              # Pre-release (1.0.0-beta.2 -> :beta, 1.0.0-rc.1 -> :rc). Never :latest.
+              PRE="${VER#*-}"
+              TAGS+=("$IMAGE:${PRE%%.*}")
+            else
+              MAJOR="${VER%%.*}"
+              MINOR="${VER#*.}"; MINOR="${MINOR%%.*}"
+              TAGS+=("$IMAGE:$MAJOR.$MINOR" "$IMAGE:latest")
+              # 0.x minors may break, so ":0" would be misleading.
+              if [[ "$MAJOR" != "0" ]]; then TAGS+=("$IMAGE:$MAJOR"); fi
+            fi
+          else
+            TAGS+=("$IMAGE:edge")
+          fi
+          printf '%s\n' "${TAGS[@]}" > "${{ runner.temp }}/tags.txt"
+
+      - name: create and push multi-arch manifest
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          ARGS=(--annotation "index:org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY")
+          while IFS= read -r tag; do ARGS+=(-t "$tag"); done < "${{ runner.temp }}/tags.txt"
+          for d in *; do ARGS+=("$IMAGE@$d"); done
+          docker buildx imagetools create "${ARGS[@]}"
+
+      - name: verify
+        run: docker buildx imagetools inspect "$(head -n1 "${{ runner.temp }}/tags.txt")"

@@ -7,7 +7,7 @@ export const QUICK_CONNECT_COOKIE = "jf_qc";
 export const SERVER_COOKIE = "jf_server";
 
 export const CLIENT_NAME = "Jelly Shark";
-export const CLIENT_VERSION = "0.1.0";
+export const CLIENT_VERSION = "0.1.0-beta.1";
 
 /** Browsers cap cookie lifetime at 400 days. */
 export const DEVICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 400;
