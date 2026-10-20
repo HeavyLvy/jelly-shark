@@ -77,5 +77,6 @@ The image is `ghcr.io/<owner>/<repo>` (lowercase). For a release `vX.Y.Z`:
 To stay on compatible updates, follow `1` (or `1.4` for patches only). For a fully repeatable setup, pin the exact
 version.
 
-The first time an image is pushed, GitHub makes the package **private**. Make it public once, in the package's
-settings on GitHub (Package settings → Change visibility), so `docker pull` works without logging in.
+GitHub can make a package **private** the first time an image is pushed. After your first release, check by pulling
+while logged out; if it's denied, open the package's settings on GitHub (Package settings → Change visibility) and make
+it public so `docker pull` works for everyone.
