@@ -26,7 +26,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
 
       - name: type check
-        run: npx tsc --noEmit
+        # Next generates the route/layout types (like LayoutProps) during a build; a fresh clone has none yet.
+        run: npx next typegen && npx tsc --noEmit
 
       - name: lint
         run: npm run lint

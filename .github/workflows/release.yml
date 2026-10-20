@@ -87,7 +87,8 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
           mkdir -p "${{ runner.temp }}/digests"
           digest="${{ steps.build.outputs.digest }}"
-          docker buildx imagetools inspect "$IMAGE@$digest" > "${{ runner.temp }}/digests/$digest"
+          # Artifact file names can't contain ":", so store the bare hash; the merge job adds "sha256:" back.
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: upload digest
         uses: actions/upload-artifact@v4
@@ -144,7 +145,7 @@ jobs:
         run: |
           ARGS=(--annotation "index:org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY")
           while IFS= read -r tag; do ARGS+=(-t "$tag"); done < "${{ runner.temp }}/tags.txt"
-          for d in *; do ARGS+=("$IMAGE@$d"); done
+          for d in *; do ARGS+=("$IMAGE@sha256:$d"); done
           docker buildx imagetools create "${ARGS[@]}"
 
       - name: verify

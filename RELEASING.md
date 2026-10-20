@@ -42,7 +42,8 @@ Three places must agree. The release workflow refuses to build if they don't:
 
 ## Cutting a release
 
-1. Make sure the code on the branch is what you want to ship: `npx tsc --noEmit`, `npm run lint`, `npm run build`.
+1. Make sure the code on the branch is what you want to ship: `npx next typegen && npx tsc --noEmit`, `npm run lint`,
+   `npm run build`.
 2. Set the new version in package.json and the lock file without creating a tag:
 
    ```bash
