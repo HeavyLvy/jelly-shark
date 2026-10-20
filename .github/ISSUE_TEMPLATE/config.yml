@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/HeavyLvy/jelly-shark/security/advisories/new
+    about: Do NOT open a public issue for a security problem. Use this private form instead. See SECURITY.md.
+  - name: Read the troubleshooting tips first
+    url: https://github.com/HeavyLvy/jelly-shark#tips-and-troubleshooting
+    about: Common problems (sign-in errors, missing seek previews, getting signed out after an update) are answered in the README.

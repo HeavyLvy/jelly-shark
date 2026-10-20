@@ -206,6 +206,12 @@ Before sending a change, run `npx next typegen && npx tsc --noEmit` (the first p
 fresh clone doesn't have yet), `npm run lint` and `npm run build`. Versioning and how releases are
 made are in [RELEASING.md](RELEASING.md).
 
+## Reporting problems and contributing
+
+Bugs, ideas and questions go in [issues](https://github.com/HeavyLvy/jelly-shark/issues/new/choose); how they are
+handled, and what a good pull request looks like, is in [CONTRIBUTING.md](CONTRIBUTING.md). Security problems must be
+reported privately: see [SECURITY.md](SECURITY.md).
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE), which also lists third-party attributions.

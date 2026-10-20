@@ -1,0 +1,21 @@
+name: Question or help
+description: Ask how to set something up or use it.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the README (install, configuration, troubleshooting) first. Remove secrets and private details from anything
+        you paste: this issue is public.
+  - type: textarea
+    id: question
+    attributes:
+      label: What are you trying to do, and where are you stuck?
+      description: Include what you ran, what you expected and what you got.
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Version and how you run it
+      placeholder: "0.1.0-beta.1, prebuilt Docker image"

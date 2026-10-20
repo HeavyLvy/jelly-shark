@@ -1,0 +1,90 @@
+name: Bug report
+description: Something in Jelly Shark is broken or behaves wrongly.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A good report gets fixed much faster.
+
+        **Security problem?** Do not post it here. Use the private link on the issue chooser page, or see SECURITY.md.
+
+        **Privacy:** these issues are public. Before pasting logs or screenshots, remove tokens, passwords, API keys, your
+        `SESSION_SECRET`, and anything about your network you want to keep private (use `192.168.x.x` or `example.com`
+        instead of real addresses).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched open and closed issues and this isn't a duplicate.
+          required: true
+        - label: I checked the README's troubleshooting section.
+          required: true
+        - label: I removed secrets and private details from everything I'm pasting.
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem. Screenshots or a short screen recording help for visual bugs.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact clicks or actions, starting from a page that loads. If it only happens sometimes, say so.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Jelly Shark version
+      description: The image tag you run (for example `0.1.0-beta.1` or `beta`), or the commit if you built it yourself (`git rev-parse --short HEAD`).
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run it?
+      options:
+        - Prebuilt Docker image (ghcr.io)
+        - Docker, built from source
+        - Without Docker (npm start / npm run dev)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: jellyfin
+    attributes:
+      label: Jellyfin server version
+      description: Dashboard, bottom of the left menu.
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Browser and device
+      description: Browser and version, and the device (phone model, desktop OS). Many bugs only happen on one browser or on touch screens.
+      placeholder: Firefox 150 on Linux, or Safari on iPhone 13 (iOS 26)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and console output
+      description: |
+        Server side: `docker compose logs jelly-shark`. Browser side: the Console tab of the developer tools (F12).
+        Paste only the relevant lines.
+      render: text
