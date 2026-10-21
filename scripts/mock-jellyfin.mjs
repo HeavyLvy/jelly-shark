@@ -518,7 +518,7 @@ function handle(req, res) {
   if (path === "/Items") {
     const type = q.get("includeItemTypes") ?? "";
     if (type.includes("Person")) {
-      const people = PEOPLE.map(([name, role], i) => ({ Id: `pe${String(i + 1).padStart(2, "0")}`, Name: name, Type: "Person", Role }));
+      const people = PEOPLE.map(([name, role], i) => ({ Id: `pe${String(i + 1).padStart(2, "0")}`, Name: name, Type: "Person", Role: role }));
       const { total, page } = filterItems(q, people);
       return jsonOut({ Items: page.map((p) => shape(p, respondOptions(q))), TotalRecordCount: total });
     }
@@ -550,7 +550,7 @@ function handle(req, res) {
     if (userRest === "Items") {
       const type = q.get("includeItemTypes") ?? "";
       if (type.includes("Person")) {
-        const people = PEOPLE.map(([name, role], i) => ({ Id: `pe${String(i + 1).padStart(2, "0")}`, Name: name, Type: "Person", Role }));
+        const people = PEOPLE.map(([name, role], i) => ({ Id: `pe${String(i + 1).padStart(2, "0")}`, Name: name, Type: "Person", Role: role }));
         const { total, page } = filterItems(q, people);
         return jsonOut({ Items: page.map((p) => shape(p, respondOptions(q))), TotalRecordCount: total });
       }

@@ -7,6 +7,7 @@
 - [ ] `npx next typegen && npx tsc --noEmit`
 - [ ] `npm run lint`
 - [ ] `npm run build`
+- [ ] `npm test` and `npm run test:e2e` (and a test for what this changes)
 - [ ] For anything visible: looked at it at phone size (390x844, touch) and desktop size, and attached screenshots
 
 ## Before merging

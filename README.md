@@ -212,7 +212,8 @@ No Jellyfin server handy? `npm run mock:jellyfin` starts a fake one on port 8920
 Set `JELLYFIN_URL=http://127.0.0.1:8920` and sign in with any username and password.
 
 Before sending a change, run `npx next typegen && npx tsc --noEmit` (the first part generates Next's route types, which a
-fresh clone doesn't have yet), `npm run lint` and `npm run build`. Versioning and how releases are
+fresh clone doesn't have yet), `npm run lint`, `npm run build`, `npm test` (fast unit tests) and `npm run test:e2e` (browser tests at desktop and
+phone size against the built-in mock Jellyfin; build first, and run `npx playwright install chromium` once). Versioning and how releases are
 made are in [RELEASING.md](RELEASING.md).
 
 ## Reporting problems and contributing

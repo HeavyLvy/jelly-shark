@@ -34,3 +34,22 @@ jobs:
 
       - name: build
         run: npm run build
+
+      # Same job on purpose: "build" is the check the beta ruleset requires, so the tests are required too.
+      - name: unit tests
+        run: npm test
+
+      - name: install the test browser
+        run: npx playwright install --with-deps chromium
+
+      - name: browser tests (desktop and phone sizes, against the mock Jellyfin)
+        run: npm run test:e2e
+
+      - name: keep the screenshots and traces of failed browser tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
