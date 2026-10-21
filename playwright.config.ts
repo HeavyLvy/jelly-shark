@@ -29,13 +29,13 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "desktop",
-      testMatch: /(desktop|shared)\.spec\.ts/,
+      testMatch: /(desktop|shared|install)\.spec\.ts/,
       dependencies: ["setup"],
       use: { browserName: "chromium", viewport: { width: 1280, height: 800 }, storageState: "e2e/.auth/state.json" },
     },
     {
       name: "phone",
-      testMatch: /(phone|shared)\.spec\.ts/,
+      testMatch: /(phone|shared|install)\.spec\.ts/,
       dependencies: ["setup"],
       use: { browserName: "chromium", viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, storageState: "e2e/.auth/state.json" },
     },

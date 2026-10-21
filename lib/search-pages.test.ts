@@ -6,6 +6,7 @@ describe("matchPages", () => {
     expect(matchPages("settings", false)[0]?.id).toBe("settings");
     expect(matchPages("hotkeys", false)[0]?.id).toBe("shortcuts");
     expect(matchPages("quick connect", false).map((p) => p.id)).toContain("approve");
+    expect(matchPages("add to home screen", false).map((p) => p.id)).toContain("install");
   });
   it("tolerates typos", () => {
     expect(matchPages("histry", false).map((p) => p.id)).toContain("history");
