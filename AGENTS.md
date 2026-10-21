@@ -52,7 +52,7 @@ A custom Jellyfin web frontend (Next.js BFF: the browser only talks to this serv
 
 ### Checks before a PR
 
-Run what CI runs: `npx next typegen && npx tsc --noEmit`, `npm run lint`, `npm run build`, then the tests: `npm test` (Vitest, fast, for plain logic in `lib/**/*.test.ts`) and `npm run test:e2e` (Playwright, needs the build first). CI does not run the tests yet (the workflow change needs the `workflow` permission on the `gh` login), so run both before every PR. Lint should now be clean. Update the README when behavior, settings or install steps change. Database changes need a migration (`npm run db:generate`), committed in `drizzle/`.
+Run what CI runs: `npx next typegen && npx tsc --noEmit`, `npm run lint`, `npm run build`, then the tests: `npm test` (Vitest, fast, for plain logic in `lib/**/*.test.ts`) and `npm run test:e2e` (Playwright, needs the build first). CI runs all of them in the `build` job, which is the check the `beta` ruleset requires (failed browser tests upload their screenshots and traces as an artifact). Lint should now be clean. Update the README when behavior, settings or install steps change. Database changes need a migration (`npm run db:generate`), committed in `drizzle/`.
 
 ### Tests
 
