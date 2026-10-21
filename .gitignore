@@ -43,3 +43,8 @@ next-env.d.ts
 
 # local SQLite database (settings)
 /data/
+
+# test output
+/test-results/
+/playwright-report/
+/e2e/.auth/

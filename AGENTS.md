@@ -52,7 +52,14 @@ A custom Jellyfin web frontend (Next.js BFF: the browser only talks to this serv
 
 ### Checks before a PR
 
-Run what CI runs: `npx next typegen && npx tsc --noEmit`, `npm run lint`, `npm run build`. The lint output currently has two known unused-variable warnings in `scripts/mock-jellyfin.mjs`. Update the README when behavior, settings or install steps change. Database changes need a migration (`npm run db:generate`), committed in `drizzle/`.
+Run what CI runs: `npx next typegen && npx tsc --noEmit`, `npm run lint`, `npm run build`, then the tests: `npm test` (Vitest, fast, for plain logic in `lib/**/*.test.ts`) and `npm run test:e2e` (Playwright, needs the build first). CI runs all of them in the `build` job, which is the check the `beta` ruleset requires. Lint should now be clean. Update the README when behavior, settings or install steps change. Database changes need a migration (`npm run db:generate`), committed in `drizzle/`.
+
+### Tests
+
+- **Unit tests** sit next to the code (`lib/search-fuzzy.test.ts`…). Server-only modules are importable in tests (the `server-only` guard is aliased away in `vitest.config.mts`); stub their database or session imports with `vi.mock`, as `lib/server-url.test.ts` does.
+- **Browser tests** are in `e2e/`. `playwright.config.ts` starts the mock Jellyfin and the production build on ports of their own (8921 and 3210) with a throw-away database, signs in once (`auth.setup.ts`), then runs `phone.spec.ts` at 390x844 touch, `desktop.spec.ts` at 1280x800, and `shared.spec.ts` at both. Run one test with `npx playwright test -g "<title>"`, add `--project=phone` to pick a size, and look at `test-results/` for the screenshot and trace of a failure.
+- **Every bug fix and every visible feature gets a test** (a phone-layout test for anything on phones), and each test should fail without the fix. When a feature needs data the mock lacks, extend `scripts/mock-jellyfin.mjs`. Lyrics are not in the mock yet, so the lyrics view has no browser test.
+- Tests use accessible roles and labels (`getByRole`), not CSS classes, and run one at a time because the mock keeps likes in memory: leave shared state as you found it.
 
 ### Working on UI
 

@@ -91,7 +91,12 @@ the issue is hidden or deleted, and the reporter is asked to resend it privately
    npx next typegen && npx tsc --noEmit
    npm run lint
    npm run build
+   npm test
+   npm run test:e2e
    ```
+
+   The browser tests need the build first and download a test browser once (`npx playwright install chromium`).
+   Bug fixes and visible features need a test that fails without them.
 
 5. **Visible changes need screenshots** (see "Working on UI" in [AGENTS.md](AGENTS.md)): a phone size (390x844, touch)
    and a desktop size, taken from a production build, looking at the whole page and not only the part you changed.
