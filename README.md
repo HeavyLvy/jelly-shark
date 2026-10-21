@@ -33,7 +33,8 @@ It doesn't replace Jellyfin or change your library. It's another way to use the 
   also finds people, your favorites, and pages and settings in the app.
 - **Profiles:** several Jellyfin users can stay signed in on one browser and switch without a password. Quick Connect
   works both ways: sign in with a code, or approve another device from inside Jelly Shark.
-- **Phones:** touch-friendly layouts with a bottom tab bar, swipe gestures and a Now Playing screen.
+- **Phones:** touch-friendly layouts with a bottom tab bar, swipe gestures and a Now Playing screen. It installs as an
+  app on your home screen.
 - **For the person running it:** per-user settings saved on the server, custom branding (name, icon, accent color), and
   control over whether people may connect to other Jellyfin servers.
 
@@ -152,6 +153,9 @@ Jelly Shark serves plain HTTP. To use HTTPS or a domain name, put it behind a re
 pointing at port 3100. Forward the `Host` header (and `X-Forwarded-Host` if your proxy changes it): Jelly Shark checks
 that changes come from its own address, and requests with a mismatched origin are refused.
 
+HTTPS also matters for installing the app (below): Android Chrome and desktop browsers only offer a real install on
+HTTPS pages (or `localhost`). Over plain HTTP they can only add a shortcut. iPhone works either way.
+
 ## Using it
 
 - **Sign in** with any Jellyfin account. Jellyfin's own permissions apply: people only see the libraries their account
@@ -159,6 +163,11 @@ that changes come from its own address, and requests with a mismatched origin ar
 - **Profiles:** use the account menu (your avatar, top right) to add another profile or switch between them.
 - **Approve a device:** in the account menu, choose *Approve a device* and type the 6-digit Quick Connect code shown
   on the other device (a TV app, another browser). Quick Connect must be turned on in Jellyfin's dashboard.
+- **Install it as an app:** open the account menu and choose *Install app* (also in Settings → Install app). It has its
+  own icon and runs full screen without browser bars, with the name and icon you set in Branding. Chrome and Edge install
+  with one tap; on iPhone the button shows the steps (Share → *Add to Home Screen*), because Safari has no install
+  prompt. If you added it to your home screen before, remove that icon and add it again to get the new icon and name.
+  It still needs a connection to your server: it is not an offline app.
 - **Keyboard shortcuts:** *Shortcuts & gestures* in the account menu lists them. Space plays or pauses, and the arrow
   keys seek and change volume.
 - **Settings** (playback quality, languages, subtitle style, poster size, which rows Home shows) are saved per user on

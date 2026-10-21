@@ -3,13 +3,14 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, History, Keyboard, LogOut, Settings, Smartphone, UserPlus } from "lucide-react";
+import { Check, ChevronDown, Download, History, Keyboard, LogOut, Settings, Smartphone, UserPlus } from "lucide-react";
 import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
 import { OPEN_SHORTCUTS } from "@/components/shortcuts-dialog";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/components/ui/cn";
 import { ApiError, hardNavigate } from "@/lib/api-client";
 import { avatarUrl, useLogout, useMe, useSwitchAccount } from "@/lib/queries/auth";
+import { useInstall } from "@/lib/use-install";
 
 const itemClass =
   "flex w-full items-center gap-3 rounded-card px-3 py-2 text-left text-sm transition hover:bg-overlay focus-visible:bg-overlay aria-disabled:opacity-50";
@@ -29,6 +30,7 @@ export function UserMenu({ floating }: { floating?: boolean } = {}) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const busy = switchAccount.isPending || logout.isPending;
+  const { installed, install } = useInstall();
 
   const close = (returnFocus: boolean) => {
     setOpen(false);
@@ -203,6 +205,20 @@ export function UserMenu({ floating }: { floating?: boolean } = {}) {
             <Smartphone className="size-4" aria-hidden="true" />
             Approve a device
           </button>
+          {!installed && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                void install();
+              }}
+              className={cn(itemClass, "text-text-secondary hover:text-text")}
+            >
+              <Download className="size-4" aria-hidden="true" />
+              Install app
+            </button>
+          )}
           <div className="my-1.5 h-px bg-hairline" role="separator" />
           <button
             type="button"

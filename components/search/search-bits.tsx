@@ -12,6 +12,7 @@ import { FloatingMenu, type MenuAnchor } from "@/components/ui/floating-menu";
 import { Skeleton } from "@/components/ui/states";
 import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
 import { OPEN_SHORTCUTS } from "@/components/shortcuts-dialog";
+import { useInstall } from "@/lib/use-install";
 import { dotJoin, formatClock, formatRuntime, formatYears, ticksToSeconds } from "@/lib/format";
 import { pickImage } from "@/lib/jellyfin/images";
 import { fetchTracksFor } from "@/lib/queries/music";
@@ -220,7 +221,11 @@ export function SongListSkeleton({ rows = 4 }: { rows?: number }) {
 const pillCls = "jelly-control inline-flex h-11 items-center gap-2.5 rounded-full px-4 text-sm font-medium text-text transition";
 
 /** Pages, settings and actions in the app that match the search ("settings", "history", "shortcuts"…). */
-export function PageResults({ pages }: { pages: AppPage[] }) {
+export function PageResults({ pages: all }: { pages: AppPage[] }) {
+  const { installed, install } = useInstall();
+  // Nothing to install once it's installed.
+  const pages = all.filter((p) => !(p.action === "install" && installed));
+  if (pages.length === 0) return null;
   return (
     <section aria-labelledby="pages-results" className="space-y-3">
       <h2 id="pages-results" className="font-display text-xl font-bold tracking-tight sm:text-[22px]">
@@ -246,7 +251,7 @@ export function PageResults({ pages }: { pages: AppPage[] }) {
                 <button
                   type="button"
                   className={pillCls}
-                  onClick={() => window.dispatchEvent(new Event(p.action === "quick-connect" ? OPEN_QUICK_CONNECT : OPEN_SHORTCUTS))}
+                  onClick={() => (p.action === "install" ? void install() : window.dispatchEvent(new Event(p.action === "quick-connect" ? OPEN_QUICK_CONNECT : OPEN_SHORTCUTS)))}
                 >
                   {body}
                 </button>
