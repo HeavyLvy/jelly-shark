@@ -9,6 +9,7 @@
 //
 // All titles are fictional placeholders. Nothing is fetched from the network
 // or written outside the process. Art is generated SVG.
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 
 const PORT = Number(process.env.MOCK_PORT ?? 8920);
@@ -216,6 +217,40 @@ for (const id of ["tr21_1", "tr21_2", "tr22_1", "tr23_4", "tr31_1", "tr31_3", "t
 /* album-artist play counts (drives "most played" artist sort + "Made for you" mixes) */
 const artistPlay = new Map(audioArtists.map((a, i) => [a.Id, i < 4 ? int(80, 400) : int(0, 40)]));
 
+/* ---------- one playable movie ---------- */
+
+// "Low Orbit" (m001) plays a real 12-second WebM clip (the test browser can't play H.264), with trickplay tiles
+// and an Intro segment from 2s to 10s, so the video player can be tried and tested end to end.
+const PLAYABLE_ID = "m001";
+const CLIP = readFileSync(new URL("./fixtures/clip.webm", import.meta.url));
+const TRICKPLAY_TILE = readFileSync(new URL("./fixtures/trickplay-0.jpg", import.meta.url));
+const CLIP_SECONDS = 12;
+const TICKS = 10_000_000;
+const CLIP_SOURCE = {
+  Id: `${PLAYABLE_ID}-clip`, Path: "/mnt/demo/low-orbit.webm", Container: "webm", RunTimeTicks: CLIP_SECONDS * TICKS,
+  SupportsDirectPlay: true, SupportsDirectStream: true, SupportsTranscoding: false,
+  MediaStreams: [
+    { Type: "Video", Codec: "vp8", Index: 0, Width: 320, Height: 180, AspectRatio: "16:9", IsDefault: true, DisplayTitle: "180p VP8" },
+    { Type: "Audio", Codec: "opus", Index: 1, Language: "eng", Channels: 1, IsDefault: true, DisplayTitle: "English - Opus - Mono", DisplayLanguage: "English" },
+  ],
+};
+/** Jellyfin's trickplay info: one 4x3 tile of 160x90 thumbnails, one per second. */
+const CLIP_TRICKPLAY = { [CLIP_SOURCE.Id]: { 160: { Width: 160, Height: 90, TileWidth: 4, TileHeight: 3, ThumbnailCount: CLIP_SECONDS, Interval: 1000, Bandwidth: 100000 } } };
+
+/** Serves the clip, honouring Range requests like Jellyfin does (browsers need 206 to seek). */
+function serveClip(req, res) {
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+  const headers = { "content-type": "video/webm", "accept-ranges": "bytes", "x-mock": "true" };
+  if (!range) {
+    res.writeHead(200, { ...headers, "content-length": CLIP.length });
+    return res.end(CLIP);
+  }
+  const start = range[1] ? Number(range[1]) : 0;
+  const end = range[2] ? Math.min(Number(range[2]), CLIP.length - 1) : CLIP.length - 1;
+  res.writeHead(206, { ...headers, "content-range": `bytes ${start}-${end}/${CLIP.length}`, "content-length": end - start + 1 });
+  res.end(CLIP.subarray(start, end + 1));
+}
+
 /* ---------- DTO shaping ---------- */
 
 function shapedUserData(id) {
@@ -292,6 +327,11 @@ function shape(raw, opts = {}) {
       ],
     }];
     out.ProviderIds = {};
+  }
+  if (id === PLAYABLE_ID) {
+    out.Trickplay = CLIP_TRICKPLAY;
+    out.RunTimeTicks = CLIP_SECONDS * TICKS;
+    if (opts.mediaStreams) out.MediaSources = [CLIP_SOURCE];
   }
   if (raw.Type === "MusicAlbum") {
     out.AlbumArtist = raw.AlbumArtist;
@@ -489,6 +529,14 @@ function handle(req, res) {
   if (favRoute && (method === "POST" || method === "DELETE")) {
     setUd(favRoute[1], { IsFavorite: method === "POST" });
     return jsonOut(shapedUserData(favRoute[1]));
+  }
+
+  // The playable movie: playback info, the stream, trickplay tiles and its Intro segment.
+  if (method === "POST" && path === `/Items/${PLAYABLE_ID}/PlaybackInfo`) return jsonOut({ PlaySessionId: "mock-play-session", MediaSources: [CLIP_SOURCE] });
+  if (method === "GET" && path === `/Videos/${PLAYABLE_ID}/stream`) return void serveClip(req, res);
+  if (method === "GET" && path.startsWith(`/Videos/${PLAYABLE_ID}/Trickplay/`)) return { status: 200, headers: { "content-type": "image/jpeg", "cache-control": "max-age=300" }, body: TRICKPLAY_TILE };
+  if (method === "GET" && path === `/MediaSegments/${PLAYABLE_ID}`) {
+    return jsonOut({ Items: [{ Id: "intro-1", ItemId: PLAYABLE_ID, Type: "Intro", StartTicks: 2 * TICKS, EndTicks: 10 * TICKS }], TotalRecordCount: 1 });
   }
 
   if (method === "POST" || method === "DELETE") {

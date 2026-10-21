@@ -39,8 +39,9 @@ jobs:
       - name: unit tests
         run: npm test
 
-      - name: install the test browser
-        run: npx playwright install --with-deps chromium
+      - name: install the test browsers
+        # Chromium for everything; Firefox too, because the video seek bar once froze only there.
+        run: npx playwright install --with-deps chromium firefox
 
       - name: browser tests (desktop and phone sizes, against the mock Jellyfin)
         run: npm run test:e2e

@@ -12,6 +12,9 @@ const APP_PORT = 3210;
 const MOCK_PORT = 8921;
 const APP_URL = `http://127.0.0.1:${APP_PORT}`;
 const DB = join(tmpdir(), "jelly-shark-e2e.db");
+// The player tests play a real clip, which browsers only start on their own with these set.
+const CHROMIUM_AUTOPLAY = { args: ["--autoplay-policy=no-user-gesture-required"] };
+const FIREFOX_AUTOPLAY = { firefoxUserPrefs: { "media.autoplay.default": 0, "media.autoplay.blocking_policy": 0 } };
 
 // Start every run with an empty settings database (workers load this file too, so only the main process does it).
 if (!process.env.TEST_WORKER_INDEX) for (const ext of ["", "-wal", "-shm"]) rmSync(DB + ext, { force: true });
@@ -29,15 +32,22 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "desktop",
-      testMatch: /(desktop|shared|install)\.spec\.ts/,
+      testMatch: /(desktop|shared|install|player)\.spec\.ts/,
       dependencies: ["setup"],
-      use: { browserName: "chromium", viewport: { width: 1280, height: 800 }, storageState: "e2e/.auth/state.json" },
+      use: { browserName: "chromium", viewport: { width: 1280, height: 800 }, storageState: "e2e/.auth/state.json", launchOptions: CHROMIUM_AUTOPLAY },
+    },
+    {
+      // Firefox handles range inputs and pointer events differently; the seek bar once froze only there.
+      name: "desktop-firefox",
+      testMatch: /player\.spec\.ts/,
+      dependencies: ["setup"],
+      use: { browserName: "firefox", viewport: { width: 1280, height: 800 }, storageState: "e2e/.auth/state.json", launchOptions: FIREFOX_AUTOPLAY },
     },
     {
       name: "phone",
-      testMatch: /(phone|shared|install)\.spec\.ts/,
+      testMatch: /(phone|shared|install|player)\.spec\.ts/,
       dependencies: ["setup"],
-      use: { browserName: "chromium", viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, storageState: "e2e/.auth/state.json" },
+      use: { browserName: "chromium", viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, storageState: "e2e/.auth/state.json", launchOptions: CHROMIUM_AUTOPLAY },
     },
   ],
   webServer: [
