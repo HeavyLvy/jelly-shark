@@ -10,7 +10,7 @@ export interface AppPage {
   keywords: string[];
   href?: string;
   /** Opens a dialog instead of navigating. */
-  action?: "shortcuts" | "quick-connect";
+  action?: "shortcuts" | "quick-connect" | "install";
   /** Only offered to Jellyfin administrators. */
   adminOnly?: boolean;
 }
@@ -41,6 +41,7 @@ export const APP_PAGES: AppPage[] = [
   { id: "branding", label: "Branding", kind: "Setting", keywords: ["name", "icon", "logo", "accent", "color", "colour", "theme"], href: "/settings", adminOnly: true },
   { id: "shortcuts", label: "Keyboard shortcuts & gestures", kind: "Action", keywords: ["hotkeys", "keys", "help", "controls", "swipe"], action: "shortcuts" },
   { id: "approve", label: "Approve a device", kind: "Action", keywords: ["quick connect", "sign in another device", "code", "tv login"], action: "quick-connect" },
+  { id: "install", label: "Install app", kind: "Action", keywords: ["add to home screen", "pwa", "web app", "download app", "icon"], action: "install" },
   { id: "add-profile", label: "Add profile", kind: "Action", keywords: ["switch user", "another account", "sign in"], href: "/login?add=1" },
 ];
 

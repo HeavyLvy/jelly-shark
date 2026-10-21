@@ -13,6 +13,7 @@ import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
 import { useMe } from "@/lib/queries/auth";
 import { useSettingsVersion } from "@/lib/settings-sync";
 import { useIsClient } from "@/lib/use-is-client";
+import { useInstall } from "@/lib/use-install";
 
 const GUTTER = "px-4 sm:px-8 lg:px-11";
 
@@ -51,6 +52,7 @@ function SettingsBody() {
     const id = window.location.hash.slice(1);
     if (id) document.getElementById(id)?.scrollIntoView({ block: "start" });
   }, []);
+  const { installed, canPrompt, install } = useInstall();
   const langOptions = LANGS.map((c) => ({ value: c, label: langName(c) }));
   const seg = (active: boolean) => cn("h-9 rounded-full px-4 text-sm font-semibold transition", active ? "bg-text text-bg" : "text-text-secondary hover:bg-overlay hover:text-text");
 
@@ -136,6 +138,19 @@ function SettingsBody() {
       </Section>
 
       <ServerSection />
+
+      <Section title="Install app">
+        <Row
+          label={installed ? "Installed" : "Add to your home screen"}
+          hint={installed ? "You're using the installed app." : "Run it like an app: its own icon, full screen, no browser bars. On iPhone this shows the steps, since Safari can't install with one tap."}
+        >
+          {!installed && (
+            <Button variant="secondary" onClick={() => void install()}>
+              {canPrompt ? "Install" : "Show me how"}
+            </Button>
+          )}
+        </Row>
+      </Section>
 
       <Section title="Devices">
         <Row label="Approve a device" hint="Sign another device into Jellyfin or Jelly Shark with Quick Connect, without leaving this page.">

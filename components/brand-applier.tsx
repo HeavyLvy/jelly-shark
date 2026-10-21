@@ -48,6 +48,11 @@ export function BrandApplier() {
     }
   }, [custom, version]);
 
+  // The name iOS proposes under the icon when adding to the Home Screen.
+  useEffect(() => {
+    document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", brand.name);
+  }, [brand.name]);
+
   // Tab title: pages set "Page · Jelly Shark"; show the custom name instead, and put the default back after a reset.
   const shownName = useRef(DEFAULT_NAME);
   useEffect(() => {
