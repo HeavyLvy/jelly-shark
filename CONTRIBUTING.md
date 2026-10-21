@@ -93,7 +93,7 @@ the issue is hidden or deleted, and the reporter is asked to resend it privately
    npm run build
    ```
 
-5. **Visible changes need screenshots** (see "Working on UI" in [CLAUDE.md](CLAUDE.md)): a phone size (390x844, touch)
+5. **Visible changes need screenshots** (see "Working on UI" in [AGENTS.md](AGENTS.md)): a phone size (390x844, touch)
    and a desktop size, taken from a production build, looking at the whole page and not only the part you changed.
    `npm run mock:jellyfin` gives you a fake server to test against.
 6. Database changes need a migration (`npm run db:generate`), committed in `drizzle/`.
