@@ -15,6 +15,9 @@ export const LIKED_ID = "liked";
 const TRACK_FIELDS: ItemFields[] = ["ParentId", "MediaSourceCount"];
 const ALBUM_FIELDS: ItemFields[] = ["ChildCount", "DateCreated", "Genres", "PrimaryImageAspectRatio"];
 
+/** Cache key prefix of useArtistLikedTracks (liking or unliking a song refreshes these). */
+export const LIKED_BY_ARTIST_KEY = ["jf", "music", "liked-by-artist"];
+
 const k = {
   tracks: (scope: string) => ["jf", "music", "tracks", scope] as const,
   list: (scope: string) => ["jf", "music", "list", scope] as const,
@@ -140,6 +143,15 @@ export function useArtistTopTracks(artistId: string, limit = 10) {
     enabled: !!artistId,
     queryFn: ({ signal }) =>
       items({ includeItemTypes: ["Audio"], artistIds: [artistId], sortBy: ["PlayCount", "CommunityRating", "SortName"], sortOrder: ["Descending", "Descending", "Ascending"], limit, fields: TRACK_FIELDS }, signal),
+  });
+}
+
+/** The songs by an artist that the user has liked (hearted), for the artist page. */
+export function useArtistLikedTracks(artistId: string) {
+  return useJfQuery({
+    queryKey: LIKED_BY_ARTIST_KEY.concat(artistId),
+    enabled: !!artistId,
+    queryFn: ({ signal }) => items({ includeItemTypes: ["Audio"], artistIds: [artistId], filters: ["IsFavorite"], sortBy: ["SortName"], fields: TRACK_FIELDS }, signal),
   });
 }
 

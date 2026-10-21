@@ -484,8 +484,15 @@ function handle(req, res) {
   const q = u.searchParams;
   const seg = path.slice(1).split("/");
 
+  // Jellyfin 12: liking is POST (like) / DELETE (unlike) on /UserFavoriteItems/{id}. The one write the mock remembers.
+  const favRoute = path.match(/^\/UserFavoriteItems\/([^/]+)$/);
+  if (favRoute && (method === "POST" || method === "DELETE")) {
+    setUd(favRoute[1], { IsFavorite: method === "POST" });
+    return jsonOut(shapedUserData(favRoute[1]));
+  }
+
   if (method === "POST" || method === "DELETE") {
-    // Browsing mock: accept and forget every write. Playback keeps a device busy but changes nothing.
+    // Browsing mock: accept and forget every other write. Playback keeps a device busy but changes nothing.
     if (path === "/Users/AuthenticateByName") return authByName(req, res);
     return noContent();
   }

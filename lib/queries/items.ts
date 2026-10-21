@@ -7,6 +7,7 @@ import { getUserDataApi } from "@jellyfin/sdk/lib/utils/api/user-data-api";
 import { CARD_FIELDS, CARD_IMAGE_TYPES, DETAIL_FIELDS } from "@/lib/jellyfin/fields";
 import { jf } from "@/lib/jellyfin/client";
 import { jfKeys } from "./keys";
+import { LIKED_BY_ARTIST_KEY } from "./music";
 import { useJfQuery } from "./use-jf-query";
 
 /** Full item for detail pages / heroes. */
@@ -94,6 +95,7 @@ export function useToggleFavorite() {
       void qc.invalidateQueries({ queryKey: jfKeys.home("favorites") });
       void qc.invalidateQueries({ predicate: (q) => q.queryKey[1] === "library" && (q.queryKey[2] as { type?: string } | undefined)?.type === "favorites" });
       void qc.invalidateQueries({ queryKey: ["jf", "library-total", "favorites"] });
+      void qc.invalidateQueries({ queryKey: LIKED_BY_ARTIST_KEY });
     },
   });
 }

@@ -11,7 +11,7 @@ import { Radio } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useItem } from "@/lib/queries/items";
-import { fetchArtistTracks, fetchRadio, useArtistAlbums, useArtistTopTracks, useSimilarArtists } from "@/lib/queries/music";
+import { fetchArtistTracks, fetchRadio, useArtistAlbums, useArtistLikedTracks, useArtistTopTracks, useSimilarArtists } from "@/lib/queries/music";
 import { usePlayer } from "@/lib/player/store";
 import { ArtistCardSkeleton, MusicAlbumCard, MusicArtistCard } from "./music-cards";
 import { MusicHeader, MusicHeaderSkeleton } from "./music-header";
@@ -22,6 +22,7 @@ export function ArtistView() {
   const artist = useItem(id);
   const top = useArtistTopTracks(id, 10);
   const albums = useArtistAlbums(id);
+  const liked = useArtistLikedTracks(id);
   const similar = useSimilarArtists(id);
   const playItems = usePlayer((s) => s.playItems);
   const [busy, setBusy] = useState(false);
@@ -113,6 +114,16 @@ export function ArtistView() {
           </>
         )}
       </section>
+      {/* Only for artists you've hearted songs of; shows nothing (not even a heading) otherwise. */}
+      {(liked.data?.length ?? 0) > 0 && (
+        <section aria-labelledby="liked-by-artist" className="mt-10 px-3 sm:px-5">
+          <h2 id="liked-by-artist" className="mb-3 px-2 font-display text-xl font-bold tracking-tight sm:text-[22px]">
+            Liked songs
+            <span className="ml-2 text-sm font-medium text-muted">{liked.data?.length}</span>
+          </h2>
+          <TrackTable tracks={liked.data ?? []} source={{ label: `Liked songs by ${a.Name ?? "this artist"}`, href: source.href }} showAlbum />
+        </section>
+      )}
       {(albums.isPending || albumCount > 0) && (
         <MediaRow title="Discography" className="mt-10">
           {albums.isPending
