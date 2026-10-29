@@ -333,6 +333,8 @@ function Player({ item }: { item: BaseItemDto }) {
     const v = videoRef.current;
     if (!v) return;
     v.currentTime = Math.min(Math.max(0, t), (v.duration || duration) - 0.5);
+    // Move the bar now: the browser's own timeupdate can be seconds away while a transcode restarts at the new position.
+    setTime(v.currentTime);
   }, [duration]);
   const seekBy = useCallback((d: number) => seekTo((videoRef.current?.currentTime ?? 0) + d), [seekTo]);
   // Touch screens: fullscreen the <video> itself so the phone's own player UI
@@ -604,6 +606,13 @@ function Player({ item }: { item: BaseItemDto }) {
   const activeSkip = (segments.data ?? []).find(
     (s: MediaSegmentDto) => SKIPPABLE.has(String(s.Type)) && time >= (s.StartTicks ?? 0) / TICKS_PER_SECOND && time < (s.EndTicks ?? 0) / TICKS_PER_SECOND - 1,
   );
+  // The Skip button lives with the controls (it hides when they hide), so show them when a skippable section starts.
+  const skipKey = activeSkip ? `${activeSkip.Type}-${activeSkip.StartTicks}` : null;
+  useEffect(() => {
+    if (!skipKey) return;
+    const t = window.setTimeout(poke, 0);
+    return () => window.clearTimeout(t);
+  }, [skipKey, poke]);
   const outro = (segments.data ?? []).find((s) => s.Type === "Outro");
   const nearEnd = duration > 0 && (outro ? time >= (outro.StartTicks ?? 0) / TICKS_PER_SECOND : duration - time <= NEXT_UP_LEAD_S);
   const showNextUp = !!next && !dismissedNext && (nearEnd || ended);
@@ -826,12 +835,18 @@ function Player({ item }: { item: BaseItemDto }) {
         </div>
       )}
 
-      {/* Skip intro / recap */}
+      {/* Skip intro / recap. Fades with the rest of the controls; z-20 keeps it above the controls bar, which spans the
+          full width and would otherwise cover it (and steal its hover and clicks) whenever the controls are showing. */}
       {activeSkip && (
         <button
           type="button"
+          inert={!controlsShown}
           onClick={() => seekTo((activeSkip.EndTicks ?? 0) / TICKS_PER_SECOND)}
-          className="jelly-control jelly-backdrop absolute right-6 bottom-32 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-text sm:right-10"
+          className={cn(
+            "jelly-control jelly-backdrop absolute right-6 bottom-32 z-20 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-text sm:right-10",
+            "transition-[opacity,transform,filter] duration-200 hover:scale-105 hover:brightness-125 active:scale-95",
+            controlsShown ? "opacity-100" : "pointer-events-none opacity-0",
+          )}
         >
           {SKIP_LABEL[String(activeSkip.Type)] ?? "Skip"} <SkipForward className="size-4" aria-hidden="true" />
         </button>
@@ -1235,6 +1250,39 @@ function SeekBar({
 }) {
   const [hover, setHover] = useState<{ frac: number; barWidth: number } | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
+
+  // A drag starts when the pointer goes down on the bar and ends when it comes up *anywhere* (or is cancelled, or the
+  // window loses focus). Only changes made during that drag count as dragging: Firefox sends one more `change` event
+  // after the release, which used to start a drag nobody could end (the bar froze and the preview stuck to the thumb).
+  const dragging = useRef(false);
+  const moved = useRef(false);
+  const dragValue = useRef(0);
+  const lastSeek = useRef({ value: -1, at: 0 });
+  const stopListening = useRef<(() => void) | null>(null);
+  const commit = (value: number) => {
+    lastSeek.current = { value, at: performance.now() };
+    setDrag(null);
+    onSeek(value);
+  };
+  const startDrag = () => {
+    stopListening.current?.();
+    dragging.current = true;
+    moved.current = false;
+    const events = ["pointerup", "pointercancel", "mouseup", "touchend", "touchcancel", "blur"] as const;
+    const end = () => {
+      stopListening.current?.();
+      if (!dragging.current) return;
+      dragging.current = false;
+      if (moved.current) commit(dragValue.current);
+      else setDrag(null);
+    };
+    for (const e of events) window.addEventListener(e, end);
+    stopListening.current = () => {
+      for (const e of events) window.removeEventListener(e, end);
+      stopListening.current = null;
+    };
+  };
+  useEffect(() => () => stopListening.current?.(), []);
   // While dragging, preview the drag position; otherwise the hovered one.
   const frac = drag !== null && duration > 0 ? drag / duration : hover?.frac ?? null;
   const barWidth = hover?.barWidth ?? 0;
@@ -1273,10 +1321,18 @@ function SeekBar({
         value={drag ?? time}
         aria-label="Seek"
         aria-valuetext={`${formatClock(drag ?? time)} of ${formatClock(duration)}`}
-        onChange={(e) => setDrag(Number(e.target.value))}
-        onPointerUp={(e) => {
-          onSeek(Number((e.target as HTMLInputElement).value));
-          setDrag(null);
+        onPointerDown={startDrag}
+        onChange={(e) => {
+          const value = Number(e.target.value);
+          if (dragging.current) {
+            dragValue.current = value;
+            moved.current = true;
+            setDrag(value);
+            return;
+          }
+          // Not a drag: Home/End/Page keys, or the browser repeating the release we've just handled.
+          const repeat = performance.now() - lastSeek.current.at < 600 && Math.abs(value - lastSeek.current.value) < 0.5;
+          if (!repeat) commit(value);
         }}
         onKeyDown={(e) => {
           // step="any" would step 1s; match the ←/→ shortcut (10s).
@@ -1284,11 +1340,6 @@ function SeekBar({
           if (!dir) return;
           e.preventDefault();
           onSeek(Math.min(Math.max(0, time + dir * 10), duration || 0));
-        }}
-        onKeyUp={(e) => {
-          if (e.key.startsWith("Arrow")) return;
-          onSeek(Number((e.target as HTMLInputElement).value));
-          setDrag(null);
         }}
         style={{ "--pct": `${drag !== null && duration ? (drag / duration) * 100 : pct}%`, "--buf": `${bufPct}%`, "--track": "5px" } as CSSProperties}
         className="jelly-range h-5 w-full cursor-pointer appearance-none bg-transparent"
