@@ -169,10 +169,14 @@ HTTPS pages (or `localhost`). Over plain HTTP they can only add a shortcut. iPho
   prompt. If you added it to your home screen before, remove that icon and add it again to get the new icon and name.
   It still needs a connection to your server: it is not an offline app.
 - **Request things that aren't in the library:** when an administrator has connected [Seerr](https://docs.seerr.dev),
-  searching also shows a *Not in your library* row. Open a title to request it (for a show, pick the seasons; ones
-  already requested or in the library can't be picked). You request as your own Seerr account, so Seerr's permissions,
-  quotas and approvals apply. Titles that are fully in your library are left out, and the row doesn't appear at all
-  when Seerr isn't connected.
+  searching also shows a *Not in your library* row. Each title opens a page just like one in your library: backdrop,
+  facts (age rating, runtime, rating, genres, studio, release date, next episode), cast, a trailer link, *Recommended*
+  and *More Like This*. For a show you also get its seasons and episodes, with each season's status and a button to
+  request it. Cast members open their own page with their movies and shows. *Request* sends it; for a show you pick the
+  seasons (ones already requested or in the library can't be picked). A title that is already in your library has
+  *Play* or *Go to show* instead. You request as your own Seerr account, so Seerr's permissions, quotas and approvals
+  apply. Titles that are fully in your library are left out of search, and none of this appears when Seerr isn't
+  connected.
 - **Keyboard shortcuts:** *Shortcuts & gestures* in the account menu lists them. Space plays or pauses, and the arrow
   keys seek and change volume.
 - **Settings** (playback quality, languages, subtitle style, poster size, which rows Home shows) are saved per user on

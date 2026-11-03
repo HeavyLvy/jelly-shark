@@ -32,12 +32,12 @@ test.describe("search", () => {
   test("offers titles that aren't in the library, with their status", async ({ page }) => {
     await page.goto("/search?q=lantern");
     await expect(row(page)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Request Lantern Harbor, Movie, 2019" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Lantern Harbor, Movie, 2019" })).toBeVisible();
     await expect(page.getByText("Night Ferry")).toHaveCount(0);
 
     // A show with some seasons already in the library says so.
     await page.goto("/search?q=night");
-    await expect(page.getByRole("button", { name: "Request Night Ferry, TV show, 2020, Partly available" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Night Ferry, TV show, 2020, Partly available" })).toBeVisible();
   });
 
   test("leaves out titles that are fully in the library, and people", async ({ page }) => {
@@ -45,7 +45,7 @@ test.describe("search", () => {
     const paper = await searchAndWait(page, "/search?q=paper");
     expect(JSON.stringify(await paper.json())).toContain("Paper Comet");
     await expect(row(page)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /Paper Comet/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Paper Comet/ })).toHaveCount(0);
     await searchAndWait(page, "/search?q=person");
     await expect(row(page)).toHaveCount(0);
     expect(await (await page.request.get("/api/seerr/search?query=person")).text()).not.toContain("A. Person");
@@ -53,11 +53,11 @@ test.describe("search", () => {
 
   test("follows the Movies and TV filters", async ({ page }) => {
     await page.goto("/search?q=er&type=tv");
-    await expect(page.getByRole("button", { name: /Request Night Ferry/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Request Lantern Harbor/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Night Ferry/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Lantern Harbor/ })).toHaveCount(0);
     await page.goto("/search?q=er&type=movies");
-    await expect(page.getByRole("button", { name: /Request Lantern Harbor/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Request Night Ferry/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Lantern Harbor/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Night Ferry/ })).toHaveCount(0);
   });
 
   test("has no extra row when Seerr isn't connected", async ({ page, baseURL }) => {
@@ -71,24 +71,66 @@ test.describe("search", () => {
   });
 });
 
-test.describe("requesting", () => {
-  test("a movie is requested as the signed-in person", async ({ page, request }) => {
-    await page.goto("/search?q=lantern");
-    await page.getByRole("button", { name: /Request Lantern Harbor/ }).click();
-    const dialog = page.getByRole("dialog", { name: "Lantern Harbor" });
-    await expect(dialog).toBeVisible();
-    // The dialog sits inside the screen at every size (a sheet from the bottom on phones).
-    const box = (await dialog.boundingBox())!;
-    const viewport = page.viewportSize()!;
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+test.describe("a title's page", () => {
+  /** Phones keep the facts card closed behind "Details"; open it so its rows can be read. */
+  async function openDetails(page: Page) {
+    const toggle = page.getByRole("button", { name: "Details" });
+    if (await toggle.isVisible()) await toggle.click();
+  }
 
-    await dialog.getByRole("button", { name: "Request", exact: true }).click();
-    await expect(dialog.getByRole("status")).toHaveText("Request sent");
-    await expect(dialog).toContainText("approved");
-    await dialog.getByRole("button", { name: "Done" }).click();
-    await expect(dialog).toHaveCount(0);
+  test("opens from a search result and looks like a library title", async ({ page }) => {
+    await page.goto("/search?q=lantern");
+    await page.getByRole("link", { name: "Lantern Harbor, Movie, 2019" }).click();
+    await expect(page).toHaveURL(/\/request\/movie\/9001$/);
+
+    const facts = page.getByRole("list", { name: "Title facts" });
+    await expect(page.getByRole("heading", { level: 1, name: "Lantern Harbor" })).toBeVisible();
+    await expect(facts).toContainText("PG-13"); // the US certification, not the UK one
+    await expect(facts).toContainText("2019");
+    await expect(facts).toContainText("2h 16m");
+    await expect(facts).toContainText("7.8");
+    await expect(page.getByText("A night watchman tends the last lamp")).toBeVisible();
+
+    await openDetails(page);
+    await expect(page.getByRole("definition").filter({ hasText: /^Mara Quill, Tomas Reed$/ })).toBeVisible();
+    await expect(page.getByRole("term").filter({ hasText: "Directed by" })).toBeVisible();
+    await expect(page.getByRole("definition").filter({ hasText: /^Ila Brandt$/ })).toBeVisible();
+    await expect(page.getByRole("definition").filter({ hasText: "Drama, Mystery" })).toBeVisible();
+    await expect(page.getByRole("definition").filter({ hasText: "Foghorn Pictures" })).toBeVisible();
+    await expect(page.getByRole("definition").filter({ hasText: "May 3, 2019" })).toBeVisible();
+    await expect(page.getByRole("definition").filter({ hasText: "English" })).toBeVisible();
+    await expect(page.getByRole("definition").filter({ hasText: "Budget $63M · Revenue $464M" })).toBeVisible();
+
+    // The trailer opens elsewhere (and is the Trailer, not the featurette).
+    const trailer = page.getByRole("link", { name: /Watch trailer/ });
+    await expect(trailer).toHaveAttribute("href", "https://www.youtube.com/watch?v=mockTrailer01");
+    await expect(trailer).toHaveAttribute("target", "_blank");
+  });
+
+  test("has cast, recommendations and more like this", async ({ page }) => {
+    await page.goto("/request/movie/9001");
+    await expect(page.getByRole("heading", { name: "Cast" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Mara Quill/ })).toContainText("Captain Ines Vale");
+    await expect(page.getByRole("heading", { name: "Recommended" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Paper Comet, Movie, 2021, Available" })).toBeVisible();
+    // "More Like This" doesn't repeat what's recommended: Paper Comet is in both lists, so only Tide Table is left.
+    await expect(page.getByRole("heading", { name: "More Like This" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Tide Table, Movie, 2017" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Paper Comet/ })).toHaveCount(1);
+    // Titles can be followed from one page to the next.
+    await page.getByRole("link", { name: /Paper Comet/ }).first().click();
+    await expect(page).toHaveURL(/\/request\/movie\/9002$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Paper Comet" })).toBeVisible();
+  });
+
+  test("a movie is requested from its page, as the signed-in person", async ({ page, request }) => {
+    await page.goto("/request/movie/9001");
+    await page.getByRole("button", { name: "Request", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Request sent");
+    await expect(page.getByRole("status")).toContainText("approved"); // demo is an administrator, so Seerr approves it
+    // The main button now says where it stands, and can't be pressed again.
+    await expect(page.getByRole("button", { name: "Approved" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Request", exact: true })).toHaveCount(0);
 
     // Seerr got it once, from Seerr user 1 (the one matched to demo), and nothing but what the app sends.
     const made = (await (await request.get(`${MOCK}/mock/requests`)).json()) as { by: number; body: Record<string, unknown> }[];
@@ -96,52 +138,147 @@ test.describe("requesting", () => {
     expect(made[0].by).toBe(1);
     expect(made[0].body).toEqual({ mediaType: "movie", mediaId: 9001 });
 
-    // The card now shows it, and it can't be asked for twice.
-    await expect(page.getByRole("button", { name: "Request Lantern Harbor, Movie, 2019, Approved" })).toBeVisible();
-    await page.getByRole("button", { name: /Request Lantern Harbor/ }).click();
-    await expect(page.getByRole("dialog").getByRole("button", { name: "Request", exact: true })).toBeDisabled();
-    await expect(page.getByRole("dialog")).toContainText("nothing more to request");
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-  });
-
-  test("chosen seasons of a show are requested, and taken ones can't be picked", async ({ page, request }) => {
-    await page.goto("/search?q=night");
-    await page.getByRole("button", { name: /Request Night Ferry/ }).click();
-    const dialog = page.getByRole("dialog", { name: "Night Ferry" });
-    await expect(dialog.getByLabel("Season 2")).toBeVisible();
-    await expect(dialog.getByLabel(/Specials/)).toHaveCount(0);
-    await expect(dialog.getByLabel(/Season 1/)).toBeDisabled(); // already in the library
-    const send = dialog.getByRole("button", { name: /^Request/ }).last();
-    await expect(send).toBeDisabled();
-
-    await dialog.getByLabel("Season 3").check();
-    await expect(dialog.getByRole("button", { name: "Request 1 season" })).toBeEnabled();
-    await dialog.getByRole("button", { name: "Select all" }).click(); // 2 and 3: the only open ones
-    await expect(dialog.getByRole("button", { name: "Request 2 seasons" })).toBeEnabled();
-    await dialog.getByRole("button", { name: "Request 2 seasons" }).click();
-    await expect(dialog.getByRole("status")).toHaveText("Request sent");
-
-    const made = (await (await request.get(`${MOCK}/mock/requests`)).json()) as { body: { seasons: number[] } }[];
-    expect(made[0].body).toEqual({ mediaType: "tv", mediaId: 9101, seasons: [2, 3] });
-    await dialog.getByRole("button", { name: "Done" }).click();
-
-    // Both are now requested, so nothing is left to pick.
-    await page.getByRole("button", { name: /Request Night Ferry/ }).click();
-    const again = page.getByRole("dialog", { name: "Night Ferry" });
-    await expect(again.getByLabel("Season 2")).toBeDisabled();
-    await expect(again.getByLabel("Season 3")).toBeDisabled();
-  });
-
-  test("closing the dialog with Escape or the close button sends nothing", async ({ page, request }) => {
+    // Everywhere else it shows too.
     await page.goto("/search?q=lantern");
-    await page.getByRole("button", { name: /Request Lantern Harbor/ }).click();
+    await expect(page.getByRole("link", { name: "Lantern Harbor, Movie, 2019, Approved" })).toBeVisible();
+  });
+
+  test("a title that's in the library plays from here instead of being requested", async ({ page }) => {
+    await page.goto("/request/movie/9002");
+    await expect(page.getByRole("link", { name: "Play" })).toHaveAttribute("href", "/watch/m001");
+    await expect(page.getByRole("button", { name: "Request", exact: true })).toHaveCount(0);
+  });
+
+  test("a person has a page of their own with their titles", async ({ page }) => {
+    await page.goto("/request/movie/9001");
+    await page.getByRole("link", { name: /Mara Quill/ }).click();
+    await expect(page).toHaveURL(/\/request\/person\/7001$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Mara Quill" })).toBeVisible();
+    await expect(page.getByText("Born March 7, 1984 in Port Alder, Norland")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Biography" })).toContainText("repertory theatre");
+    await page.getByRole("button", { name: "More" }).click();
+    await expect(page.getByRole("region", { name: "Biography" })).toContainText("unread scripts");
+    // The same title listed twice by TMDB shows once.
+    const acting = page.getByRole("region", { name: "Acting" });
+    await expect(acting.getByRole("link", { name: /Lantern Harbor/ })).toHaveCount(1);
+    await expect(acting.getByRole("link", { name: /Night Ferry/ })).toHaveCount(1);
+    await acting.getByRole("link", { name: /Lantern Harbor/ }).click();
+    await expect(page).toHaveURL(/\/request\/movie\/9001$/);
+
+    await page.goto("/request/person/7003");
+    await expect(page.getByRole("region", { name: "Crew" }).getByRole("link", { name: /Lantern Harbor/ })).toBeVisible();
+  });
+
+  test("says so when Seerr doesn't know a title, the link is wrong, or Seerr is off", async ({ page, baseURL }) => {
+    await page.goto("/request/movie/1");
+    await expect(page.getByRole("heading", { level: 1, name: "Seerr doesn't know this title" })).toBeVisible();
+    await page.goto("/request/movie/abc");
+    await expect(page.getByRole("heading", { level: 1, name: "Nothing here" })).toBeVisible();
+    await page.goto("/request/music/9001");
+    await expect(page.getByRole("heading", { level: 1, name: "Nothing here" })).toBeVisible();
+    await page.request.delete("/api/seerr-config", { headers: { origin: baseURL! } });
+    await page.goto("/request/movie/9001");
+    await expect(page.getByRole("heading", { level: 1, name: "Requests aren't set up" })).toBeVisible();
+  });
+
+  test("fits the screen", async ({ page }) => {
+    for (const url of ["/request/movie/9001", "/request/tv/9101", "/request/person/7001"]) {
+      await page.goto(url);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow, url).toBeLessThanOrEqual(0);
+    }
+  });
+});
+
+test.describe("a show's page", () => {
+  test("has its seasons and episodes like a library show", async ({ page }) => {
+    await page.goto("/request/tv/9101");
+    const facts = page.getByRole("list", { name: "Title facts" });
+    await expect(page.getByRole("heading", { level: 1, name: "Night Ferry" })).toBeVisible();
+    await expect(facts).toContainText("TV-14");
+    await expect(facts).toContainText("2020–Present");
+    await expect(facts).toContainText("3 Seasons");
+    await expect(facts).toContainText("22 Episodes");
+    // Some of it is in the library, so it can be opened from here.
+    await expect(page.getByRole("link", { name: "Go to show" })).toHaveAttribute("href", "/show/s002");
+
+    const episodes = page.getByRole("region", { name: "Episodes" });
+    const seasons = episodes.getByRole("group", { name: "Season" });
+    await expect(seasons.getByRole("button", { name: /Specials/ })).toHaveCount(0);
+    await expect(episodes.getByRole("heading", { level: 3, name: /S1 Episode 1/ })).toBeVisible();
+    await expect(episodes.getByText("Available")).toBeVisible(); // season 1 is in the library
+    await expect(episodes.getByRole("button", { name: /Request/ })).toHaveCount(0);
+
+    await seasons.getByRole("button", { name: "Season 3" }).click();
+    await expect(page).toHaveURL(/season=3/);
+    await expect(episodes.getByRole("heading", { level: 3, name: /S3 Episode 1/ })).toBeVisible();
+    await expect(episodes.getByText("Airs January 1, 2099").first()).toBeVisible();
+  });
+
+  test("a show with many seasons switches season with a dropdown on a phone, and buttons otherwise", async ({ page }) => {
+    await page.goto("/request/tv/9102");
+    await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+    const episodes = page.getByRole("region", { name: "Episodes" });
+    const phone = (page.viewportSize()?.width ?? 1000) < 640;
+    const buttons = episodes.getByRole("group", { name: "Season" });
+    const dropdown = episodes.getByRole("button", { name: /^Season: Season 1/ });
+    if (phone) {
+      await expect(buttons).toBeHidden();
+      await dropdown.click();
+      await page.getByRole("option", { name: "Season 4" }).click();
+    } else {
+      await expect(dropdown).toBeHidden();
+      await buttons.getByRole("button", { name: "Season 4" }).click();
+    }
+    await expect(page).toHaveURL(/season=4/);
+    await expect(episodes.getByRole("heading", { level: 3, name: /S4 Episode 1/ })).toBeVisible();
+  });
+
+  test("a season can be requested from its own page, or several from the button", async ({ page, request }) => {
+    await page.goto("/request/tv/9101?season=2");
+    const episodes = page.getByRole("region", { name: "Episodes" });
+    await episodes.getByRole("button", { name: "Request Season 2" }).click();
+    await expect(page.getByRole("status")).toContainText("Request sent");
+    await expect(episodes.getByRole("button", { name: /Request Season 2/ })).toHaveCount(0);
+    let made = (await (await request.get(`${MOCK}/mock/requests`)).json()) as { body: { seasons: number[] } }[];
+    expect(made.map((m) => m.body)).toEqual([{ mediaType: "tv", mediaId: 9101, seasons: [2] }]);
+
+    // Only season 3 is left, and the picker knows.
+    await page.getByRole("button", { name: "Request seasons" }).click();
+    const picker = page.getByRole("dialog", { name: "Request seasons" });
+    await expect(picker.getByLabel("Season 1")).toBeDisabled(); // in the library
+    await expect(picker.getByLabel("Season 2")).toBeDisabled(); // just requested
+    await expect(picker.getByLabel(/Specials/)).toHaveCount(0);
+    await expect(picker.getByLabel("Season 3")).toBeChecked(); // the only open one starts ticked
+    await picker.getByRole("button", { name: "Request 1 season" }).click();
+    await expect(picker).toHaveCount(0);
+    made = (await (await request.get(`${MOCK}/mock/requests`)).json()) as { body: { seasons: number[] } }[];
+    expect(made.map((m) => m.body.seasons)).toEqual([[2], [3]]);
+    // Nothing left to ask for.
+    await expect(page.getByRole("button", { name: "Request seasons" })).toHaveCount(0);
+  });
+
+  test("the season picker closes with Escape or Close and sends nothing", async ({ page, request }) => {
+    await page.goto("/request/tv/9101");
+    await page.getByRole("button", { name: "Request seasons" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await page.getByRole("button", { name: /Request Lantern Harbor/ }).click();
+    await page.getByRole("button", { name: "Request seasons" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await (await request.get(`${MOCK}/mock/requests`)).json()).toEqual([]);
+  });
+
+  test("shows the next episode in the details", async ({ page }) => {
+    await page.goto("/request/tv/9101");
+    await expect(page.getByRole("heading", { level: 1, name: "Night Ferry" })).toBeVisible();
+    const toggle = page.getByRole("button", { name: "Details" });
+    if (await toggle.isVisible()) await toggle.click();
+    await expect(page.getByRole("definition").filter({ hasText: "S3 E2 · January 1, 2099" })).toBeVisible();
+    await expect(page.getByRole("definition").filter({ hasText: "Riverlight" })).toBeVisible();
+    await expect(page.getByRole("term").filter({ hasText: "Created by" })).toBeVisible();
   });
 });
 
@@ -173,9 +310,26 @@ test.describe("the Seerr API", () => {
     const ok = await page.request.get("/api/seerr/image/w342/lanternharbor.jpg");
     expect(ok.status()).toBe(200);
     expect(ok.headers()["content-type"]).toMatch(/^image\//);
-    for (const path of ["/api/seerr/image/original/lanternharbor.jpg", "/api/seerr/image/w342/..%2Fsecret.jpg", "/api/seerr/image/w342/x.svg"]) {
+    expect((await page.request.get("/api/seerr/image/w1280/lanternharborbg.jpg")).status()).toBe(200);
+    for (const path of ["/api/seerr/image/original/lanternharbor.jpg", "/api/seerr/image/w1000/lanternharbor.jpg", "/api/seerr/image/w342/..%2Fsecret.jpg", "/api/seerr/image/w342/x.svg"]) {
       expect((await page.request.get(path)).status(), path).toBe(400);
     }
+  });
+
+  test("sends trimmed episodes, people and lists", async ({ page }) => {
+    const season = await page.request.get("/api/seerr/tv/9101/season/1");
+    const body = (await season.json()) as { episodes: { number: number; stillPath: string }[] };
+    expect(body.episodes[0]).toMatchObject({ number: 1, stillPath: "/ferrystill1x1.jpg" }); // a plain file name, not the full TMDB address
+    expect(JSON.stringify(body)).not.toContain("tmdb.org");
+    expect((await page.request.get("/api/seerr/tv/9101/season/0")).status()).toBe(400);
+    expect((await page.request.get("/api/seerr/tv/9101/season/99")).status()).toBe(404);
+    expect((await page.request.get("/api/seerr/movie/9001/season/1")).status()).toBe(404);
+    expect((await page.request.get("/api/seerr/movie/9001/recommendations")).status()).toBe(200);
+    expect((await page.request.get("/api/seerr/movie/9001/trailers")).status()).toBe(400);
+    expect((await page.request.get("/api/seerr/person/abc")).status()).toBe(400);
+    const detail = await (await page.request.get("/api/seerr/movie/9001")).text();
+    expect(detail).not.toContain("mediaInfo");
+    expect(detail).not.toContain("credits");
   });
 
   test("never sends the API key or Seerr's own details to the browser", async ({ page }) => {

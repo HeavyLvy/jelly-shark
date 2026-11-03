@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapMediaStatus, normalizeDetail, normalizeItem, normalizeSeasons, safePosterPath } from "./normalize";
+import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizePerson, normalizeSeasons, safePosterPath } from "./normalize";
 
 describe("mapMediaStatus", () => {
   it.each([
@@ -65,10 +65,113 @@ describe("normalizeSeasons", () => {
   });
 });
 
+describe("imageFileName", () => {
+  it("keeps just the file name, whether it came as a path or a full address", () => {
+    expect(imageFileName("/abc.jpg")).toBe("/abc.jpg");
+    expect(imageFileName("https://image.tmdb.org/t/p/original//ydlY3iPf.jpg")).toBe("/ydlY3iPf.jpg");
+    for (const bad of [null, "", "https://evil.test/x.svg", "/a/..", 7]) expect(imageFileName(bad)).toBeNull();
+  });
+});
+
+const MOVIE = {
+  id: 603, title: "Lantern Harbor", releaseDate: "2019-05-03", overview: "A harbor.", posterPath: "/p.jpg", backdropPath: "/b.jpg", tagline: " Keep the light on. ",
+  runtime: 136, voteAverage: 7.8, status: "Released", originalLanguage: "en", budget: 63000000, revenue: 0, homepage: "https://example.test/", genres: [{ name: "Drama" }, { name: "Mystery" }],
+  productionCompanies: [{ name: "Foghorn" }], mediaInfo: { status: 5, jellyfinMediaId: "abc123", ratingKey: "secret" },
+  credits: {
+    cast: [{ id: 1, name: "Mara Quill", character: "Ines", profilePath: "/m.jpg" }, { id: 1, name: "Mara Quill", character: "Again" }, { id: 2, name: "Tomas Reed", character: "Gus", profilePath: "../x" }],
+    crew: [{ id: 3, name: "Ila Brandt", job: "Director" }, { id: 3, name: "Ila Brandt", job: "Screenplay" }, { id: 4, name: "Sam Ono", job: "Producer" }],
+  },
+  releases: { results: [{ iso_3166_1: "GB", release_dates: [{ certification: "12A" }] }, { iso_3166_1: "US", release_dates: [{ certification: "" }, { certification: "PG-13" }] }] },
+  relatedVideos: [{ site: "YouTube", key: "feat0000001", type: "Featurette" }, { site: "Vimeo", key: "vimeo000001", type: "Trailer" }, { site: "YouTube", key: "trail000001", type: "Trailer" }],
+};
+
 describe("normalizeDetail", () => {
-  it("gives a movie no seasons and a show its seasons", () => {
+  it("keeps what a movie page shows, and nothing else", () => {
+    const d = normalizeDetail(MOVIE, "movie")!;
+    expect(d.item).toMatchObject({ id: 603, title: "Lantern Harbor", status: "available" });
+    expect(d).toMatchObject({
+      tagline: "Keep the light on.", backdropPath: "/b.jpg", runtime: 136, rating: 7.8, certification: "PG-13", date: "2019-05-03", statusText: "Released",
+      originalLanguage: "en", genres: ["Drama", "Mystery"], studios: ["Foghorn"], budget: 63000000, revenue: null, homepage: "https://example.test/", jellyfinId: "abc123",
+      directors: ["Ila Brandt"], writers: ["Ila Brandt"], numberOfSeasons: null, seasons: [],
+    });
+    expect(JSON.stringify(d)).not.toContain("secret");
+  });
+  it("lists the cast once each, with only safe pictures", () => {
+    expect(normalizeDetail(MOVIE, "movie")!.cast).toEqual([
+      { id: 1, name: "Mara Quill", role: "Ines", profilePath: "/m.jpg" },
+      { id: 2, name: "Tomas Reed", role: "Gus", profilePath: null },
+    ]);
+  });
+  it("picks the YouTube trailer, not a featurette or another site's", () => {
+    expect(normalizeDetail(MOVIE, "movie")!.trailerUrl).toBe("https://www.youtube.com/watch?v=trail000001");
+    expect(normalizeDetail({ ...MOVIE, relatedVideos: [] }, "movie")!.trailerUrl).toBeNull();
+    expect(normalizeDetail({ ...MOVIE, relatedVideos: [{ site: "YouTube", key: "x y z", type: "Trailer" }] }, "movie")!.trailerUrl).toBeNull();
+  });
+  it("only links to web pages", () => {
+    expect(normalizeDetail({ ...MOVIE, homepage: "javascript:alert(1)" }, "movie")!.homepage).toBeNull();
+  });
+  it("falls back to another region's rating when there is no US one", () => {
+    expect(normalizeDetail({ ...MOVIE, releases: { results: [{ iso_3166_1: "GB", release_dates: [{ certification: "12A" }] }] } }, "movie")!.certification).toBe("12A");
+    expect(normalizeDetail({ ...MOVIE, releases: undefined }, "movie")!.certification).toBeNull();
+  });
+  it("reads a show: creators, networks, seasons, next episode", () => {
+    const d = normalizeDetail(
+      {
+        id: 7, name: "Night Ferry", firstAirDate: "2020-02-01", lastAirDate: "2024-06-01", status: "Returning Series", numberOfSeasons: 3, numberOfEpisodes: 22, runtime: 50, voteAverage: 0,
+        createdBy: [{ name: "Ila Brandt" }], networks: [{ name: "Riverlight" }], nextEpisodeToAir: { airDate: "2099-01-01", seasonNumber: 3, episodeNumber: 2 },
+        contentRatings: { results: [{ iso_3166_1: "DE", rating: "12" }, { iso_3166_1: "US", rating: "TV-14" }] }, seasons: [{ seasonNumber: 0 }, { seasonNumber: 1, name: "Season 1", episodeCount: 6 }],
+      },
+      "tv",
+    )!;
+    expect(d).toMatchObject({ creators: ["Ila Brandt"], networks: ["Riverlight"], certification: "TV-14", numberOfSeasons: 3, numberOfEpisodes: 22, date: "2020-02-01", lastDate: "2024-06-01", runtime: null, rating: null, nextEpisode: { season: 3, episode: 2, airDate: "2099-01-01" } });
+    expect(d.seasons.map((s) => s.number)).toEqual([1]);
+  });
+  it("gives a movie no seasons and rejects what isn't a title", () => {
     expect(normalizeDetail({ id: 1, title: "M", seasons: [{ seasonNumber: 1 }] }, "movie")?.seasons).toEqual([]);
-    expect(normalizeDetail({ id: 2, name: "S", seasons: [{ seasonNumber: 1, episodeCount: 2 }] }, "tv")?.seasons).toHaveLength(1);
     expect(normalizeDetail(null, "tv")).toBeNull();
+    expect(normalizeDetail({ id: 1 }, "movie")).toBeNull();
+  });
+});
+
+describe("normalizeList", () => {
+  it("fills in the type Seerr left out and drops anything unusable", () => {
+    const list = normalizeList({ results: [{ id: 1, title: "A" }, { id: 2, name: "B", mediaType: "tv" }, { id: 3 }, "x"] }, "movie");
+    expect(list.map((i) => [i.id, i.mediaType, i.title])).toEqual([[1, "movie", "A"], [2, "tv", "B"]]);
+    expect(normalizeList(null, "movie")).toEqual([]);
+  });
+});
+
+describe("normalizeEpisodes", () => {
+  it("sorts a season's episodes and keeps stills as plain file names", () => {
+    const eps = normalizeEpisodes({ episodes: [{ episodeNumber: 2, name: "Two", airDate: "2020-01-09", runtime: 0, stillPath: "https://image.tmdb.org/t/p/original//two.jpg" }, { episodeNumber: 1, overview: "First." }, { name: "no number" }] });
+    expect(eps).toEqual([
+      { number: 1, name: "Episode 1", overview: "First.", airDate: null, runtime: null, stillPath: null },
+      { number: 2, name: "Two", overview: "", airDate: "2020-01-09", runtime: null, stillPath: "/two.jpg" },
+    ]);
+  });
+});
+
+describe("normalizePerson and normalizeCredits", () => {
+  it("reads a person, with non-breaking spaces turned into spaces", () => {
+    expect(normalizePerson({ id: 5, name: "Mara Quill", biography: "Born\u00a0here.", birthday: "1984-03-07", deathday: null, placeOfBirth: "Port Alder", profilePath: "/m.jpg", knownForDepartment: "Acting" })).toEqual({
+      id: 5, name: "Mara Quill", biography: "Born here.", birthday: "1984-03-07", deathday: null, placeOfBirth: "Port Alder", profilePath: "/m.jpg", department: "Acting",
+    });
+    expect(normalizePerson({ id: 5 })).toBeNull();
+  });
+  it("lists each credit once, best known first for acting and newest first for crew", () => {
+    const c = normalizeCredits({
+      cast: [{ id: 1, mediaType: "movie", title: "Quiet", voteCount: 10, character: "A" }, { id: 2, mediaType: "tv", name: "Loud", voteCount: 9000, character: "B" }, { id: 2, mediaType: "tv", name: "Loud", voteCount: 9000, character: "B" }, { id: 3, mediaType: "person", name: "x" }, { id: 4, mediaType: "movie", title: "Mid", voteCount: 500, character: "C" }, { id: 5, mediaType: "movie", title: "Mid2", voteCount: 400, character: "D" }],
+      crew: [{ id: 6, mediaType: "movie", title: "Old", releaseDate: "1999-01-01" }, { id: 7, mediaType: "movie", title: "New", releaseDate: "2021-01-01" }],
+    });
+    expect(c.cast.map((i) => i.title)).toEqual(["Loud", "Mid", "Mid2", "Quiet"]);
+    expect(c.crew.map((i) => i.title)).toEqual(["New", "Old"]);
+    expect(normalizeCredits(null)).toEqual({ cast: [], crew: [] });
+  });
+  it("leaves out talk-show appearances, but keeps them when they're nearly all there is", () => {
+    const role = (id: number, character: string, voteCount = 1) => ({ id, mediaType: "movie", title: `T${id}`, character, voteCount });
+    const plenty = normalizeCredits({ cast: [role(1, "Himself", 99999), role(2, "Self - Guest", 99999), role(3, "Walter"), role(4, "Jesse"), role(5, "Skyler"), role(6, "Hank")] });
+    expect(plenty.cast.map((i) => i.id).sort()).toEqual([3, 4, 5, 6]);
+    const few = normalizeCredits({ cast: [role(1, "Herself"), role(2, "Self"), role(3, "Judge")] });
+    expect(few.cast).toHaveLength(3);
   });
 });
