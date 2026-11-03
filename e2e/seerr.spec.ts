@@ -510,3 +510,63 @@ test.describe("Discover", () => {
     await anon.dispose();
   });
 });
+
+test.describe("Cancelling a request", () => {
+  const seed = (page: Page, data: object) => page.request.post(`${MOCK}/mock/requests`, { data });
+  const mock = async (page: Page) => (await (await page.request.get(`${MOCK}/mock/requests`)).json()) as { id: number }[];
+
+  test("takes back a waiting request from My requests, after asking", async ({ page }) => {
+    await seed(page, { mediaType: "movie", mediaId: 9001, status: 1 });
+    await seed(page, { mediaType: "movie", mediaId: 9003, status: 2 });
+    await page.goto("/requests");
+    const list = page.getByRole("list", { name: "Requests" });
+    // Only a request that is still waiting can be cancelled.
+    await expect(page.getByRole("button", { name: /Cancel request for/ })).toHaveCount(1);
+    await page.getByRole("button", { name: "Cancel request for Lantern Harbor" }).click();
+    await page.getByRole("button", { name: "Keep it" }).click();
+    expect(await mock(page)).toHaveLength(2);
+
+    await page.getByRole("button", { name: "Cancel request for Lantern Harbor" }).click();
+    await page.getByRole("button", { name: "Yes, cancel it" }).click();
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    await expect(list).not.toContainText("Lantern Harbor");
+    expect(await mock(page)).toHaveLength(1);
+  });
+
+  test("a waiting request can be cancelled from the title's page, and it can be requested again", async ({ page }) => {
+    await seed(page, { mediaType: "movie", mediaId: 9001, status: 1 });
+    await page.goto("/request/movie/9001");
+    await expect(page.getByRole("button", { name: "Requested" })).toBeDisabled();
+    await page.getByRole("button", { name: "Cancel request for Lantern Harbor" }).click();
+    await page.getByRole("button", { name: "Yes, cancel it" }).click();
+    await expect(page.getByRole("button", { name: "Request", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /Cancel request/ })).toHaveCount(0);
+  });
+
+  test("an approved request has no cancel button", async ({ page }) => {
+    await seed(page, { mediaType: "movie", mediaId: 9001, status: 2 });
+    await page.goto("/request/movie/9001");
+    await expect(page.getByRole("button", { name: "Approved" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Cancel request/ })).toHaveCount(0);
+  });
+
+  test("the server only cancels your own waiting requests", async ({ page, baseURL, playwright }) => {
+    const del = (id: number | string, origin = baseURL!) => page.request.delete(`/api/seerr/request/${id}`, { headers: { origin } });
+    const theirs = await (await seed(page, { mediaType: "movie", mediaId: 9001, status: 1, by: 2 })).json();
+    const approved = await (await seed(page, { mediaType: "movie", mediaId: 9003, status: 2 })).json();
+    const mine = await (await seed(page, { mediaType: "movie", mediaId: 9002, status: 1 })).json();
+
+    expect((await del(theirs.id)).status()).toBe(403);
+    expect((await del(approved.id)).status()).toBe(409);
+    expect((await del(mine.id, "https://evil.example")).status()).toBe(403);
+    expect((await del("abc")).status()).toBe(400);
+    expect((await del(9999)).status()).toBe(404);
+    expect(await mock(page)).toHaveLength(3);
+    expect((await del(mine.id)).status()).toBe(200);
+    expect((await mock(page)).map((r) => r.id).sort()).toEqual([theirs.id, approved.id].sort());
+
+    const anon = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+    expect((await anon.delete(`/api/seerr/request/${theirs.id}`, { headers: { origin: baseURL! } })).status()).toBe(401);
+    await anon.dispose();
+  });
+});

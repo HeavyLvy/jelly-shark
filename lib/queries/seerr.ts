@@ -110,6 +110,15 @@ export function useSeerrRequest() {
   });
 }
 
+/** Cancel one of your own requests that is still waiting. Everything Seerr-related refetches afterwards. */
+export function useSeerrCancel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch<{ ok: true }>(`/api/seerr/request/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: seerrKeys.all }),
+  });
+}
+
 export type SeerrImageSize = "w185" | "w300" | "w342" | "w500" | "w780" | "w1280";
 
 /** A TMDB image through our server (the browser never talks to Seerr or TMDB). `file` is like `/abc.jpg`. */
