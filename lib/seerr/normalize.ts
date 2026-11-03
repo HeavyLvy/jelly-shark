@@ -1,4 +1,4 @@
-import type { SeerrCredits, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPerson, SeerrPersonDetail, SeerrRequestRow, SeerrSeason, SeerrStatus } from "./types";
+import type { SeerrCredits, SeerrDetail, SeerrGenre, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPerson, SeerrPersonDetail, SeerrRequestRow, SeerrSeason, SeerrStatus } from "./types";
 
 /** Pure helpers that turn Seerr's replies into the small shapes in ./types. */
 
@@ -191,6 +191,11 @@ export function normalizeList(raw: unknown, mediaType: SeerrMediaType): SeerrIte
 /** A list where every result says what it is (Discover's trending row); people are left out. */
 export function normalizeMixed(raw: unknown): SeerrItem[] {
   return (isObj(raw) ? arr(raw.results) : []).map(normalizeItem).filter((i): i is SeerrItem => i !== null);
+}
+
+/** TMDB's genre list for movies or shows. */
+export function normalizeGenres(raw: unknown): SeerrGenre[] {
+  return arr(raw).flatMap((g) => (isObj(g) && typeof g.id === "number" && Number.isInteger(g.id) && g.id > 0 && str(g.name).trim() ? [{ id: g.id, name: str(g.name).trim().slice(0, 40) }] : []));
 }
 
 /** Which page Seerr sent and how many there are; TMDB stops serving at 500. */

@@ -7,9 +7,9 @@ import { ChevronLeft } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
-import { useSeerrDiscoverPages } from "@/lib/queries/seerr";
+import { useSeerrDiscoverPages, useSeerrGenrePages, useSeerrGenres } from "@/lib/queries/seerr";
 import { discoverRow } from "@/lib/seerr/discover";
-import type { SeerrDiscoverKind, SeerrItem, SeerrPage } from "@/lib/seerr/types";
+import type { SeerrDiscoverKind, SeerrItem, SeerrMediaType, SeerrPage } from "@/lib/seerr/types";
 import { PosterCardSkeleton } from "@/components/media/cards";
 import { SeerrPosterCard } from "./seerr-cards";
 
@@ -33,6 +33,27 @@ export function DiscoverRowPage() {
 function ActiveRow({ kind, title, subtitle }: { kind: SeerrDiscoverKind; title: string; subtitle: string }) {
   const pages = useSeerrDiscoverPages(kind);
   return <SeerrBrowse title={title} subtitle={subtitle} pages={pages} />;
+}
+
+/** /discover/genre/<movie|tv>/<id>. */
+export function GenrePage() {
+  const { type, id } = useParams<{ type: string; id: string }>();
+  const n = /^\d{1,9}$/.test(id) ? Number(id) : 0;
+  if (n <= 0 || (type !== "movie" && type !== "tv")) {
+    return (
+      <div className={`pt-36 pb-24 ${GUTTER}`}>
+        <EmptyState as="h1" title="Nothing here" description="That isn't a genre to browse." action={<BackToDiscover />} />
+      </div>
+    );
+  }
+  return <ActiveGenre key={`${type}-${n}`} type={type} id={n} />;
+}
+
+function ActiveGenre({ type, id }: { type: SeerrMediaType; id: number }) {
+  const pages = useSeerrGenrePages(type, id);
+  const name = useSeerrGenres(type).data?.find((g) => g.id === id)?.name;
+  const kind = type === "movie" ? "Movies" : "Shows";
+  return <SeerrBrowse title={name ? `${name} ${kind}` : kind} subtitle="Ask for anything that isn't in your library yet" pages={pages} />;
 }
 
 function BackToDiscover() {

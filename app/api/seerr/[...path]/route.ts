@@ -4,7 +4,7 @@ import { rateLimited } from "@/lib/rate-limit";
 import { SEERR_PROXY_PREFIX } from "@/lib/constants";
 import { seerrCall, seerrMessage } from "@/lib/seerr/client";
 import { requireSeerrUser, requireSignedIn } from "@/lib/seerr/context";
-import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests, pageOf } from "@/lib/seerr/normalize";
+import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeGenres, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests, pageOf } from "@/lib/seerr/normalize";
 import type { SeerrDiscoverKind, SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/types";
 
 /**
@@ -19,6 +19,8 @@ import type { SeerrDiscoverKind, SeerrItem, SeerrMediaType, SeerrRequestBody } f
  *   GET  /api/seerr/tv/<id>/season/<n>   a season's episodes
  *   GET  /api/seerr/person/<id>[/credits] a person and the titles they're in
  *   GET  /api/seerr/discover/<row>       trending | movies | tv | upcoming-movies | upcoming-tv  (?page=n)
+ *   GET  /api/seerr/genres/<movie|tv>    the genres to browse
+ *   GET  /api/seerr/discover/genre/<movie|tv>/<id>  titles in one genre (?page=n)
  *   GET  /api/seerr/requests             your own requests, newest first
  *   POST /api/seerr/request              ask for a movie, or seasons of a show
  *   DELETE /api/seerr/request/<id>       cancel one of your own requests that is still waiting
@@ -104,12 +106,27 @@ function parsePage(req: NextRequest): number | null {
   return /^\d{1,3}$/.test(raw) && Number(raw) >= 1 && Number(raw) <= 500 ? Number(raw) : null;
 }
 
+async function pagedList(req: NextRequest, path: string, type: SeerrMediaType | null): Promise<Response> {
+  const page = parsePage(req);
+  if (page === null) return jsonError(400, "bad_page");
+  return lookup(`${path}?page=${page}`, (d) => ({ results: type ? normalizeList(d, type) : normalizeMixed(d), ...pageOf(d) }));
+}
+
 async function discover(req: NextRequest, kind: string): Promise<Response> {
   const row = Object.hasOwn(DISCOVER, kind) ? DISCOVER[kind as SeerrDiscoverKind] : null;
-  const page = parsePage(req);
-  if (!row) return jsonError(404, "not_found");
-  if (page === null) return jsonError(400, "bad_page");
-  return lookup(`${row.path}?page=${page}`, (d) => ({ results: row.type ? normalizeList(d, row.type) : normalizeMixed(d), ...pageOf(d) }));
+  return row ? pagedList(req, row.path, row.type) : jsonError(404, "not_found");
+}
+
+async function genreTitles(req: NextRequest, type: string, rawId: string): Promise<Response> {
+  const id = parseId(rawId);
+  if (type !== "movie" && type !== "tv") return jsonError(404, "not_found");
+  if (id === null) return jsonError(400, "bad_id");
+  return pagedList(req, `/discover/${type === "movie" ? "movies" : "tv"}/genre/${id}`, type);
+}
+
+async function genres(type: string): Promise<Response> {
+  if (type !== "movie" && type !== "tv") return jsonError(404, "not_found");
+  return lookup(`/genres/${type}`, (d) => ({ genres: normalizeGenres(d) }));
 }
 
 /** The signed-in person's own requests. Seerr gives an administrator everyone's unless told whose to list. */
@@ -215,6 +232,8 @@ export async function GET(req: NextRequest) {
   if (parts.length === 1 && first === "search") return search(req);
   if (parts.length === 1 && first === "requests") return myRequests();
   if (parts.length === 2 && first === "discover") return discover(req, second);
+  if (parts.length === 4 && first === "discover" && second === "genre") return genreTitles(req, third!, fourth!);
+  if (parts.length === 2 && first === "genres") return genres(second!);
   if (parts.length === 2 && isTitle) return detail(first, second);
   if (parts.length === 3 && isTitle) return related(first, second, third);
   if (parts.length === 4 && first === "tv" && third === "season") return season(second, fourth);

@@ -611,3 +611,50 @@ test.describe("See all", () => {
     expect(body).toMatchObject({ page: 2, totalPages: 2 });
   });
 });
+
+test.describe("Browse by genre", () => {
+  test("Discover lists genres for movies and shows", async ({ page }) => {
+    await page.goto("/discover");
+    const genres = page.getByRole("region", { name: "Browse by genre" });
+    await expect(genres.getByRole("link", { name: "Animation" })).toBeVisible();
+    await expect(genres.getByRole("link", { name: "Sci-Fi & Fantasy" })).toHaveCount(0);
+    await genres.getByRole("button", { name: "Shows" }).click();
+    await expect(genres.getByRole("link", { name: "Sci-Fi & Fantasy" })).toBeVisible();
+    await expect(genres.getByRole("link", { name: "Animation" })).toHaveCount(0);
+  });
+
+  test("a genre opens a list of its titles", async ({ page }) => {
+    await page.goto("/discover");
+    await page.getByRole("region", { name: "Browse by genre" }).getByRole("link", { name: "Drama" }).click();
+    await expect(page).toHaveURL(/\/discover\/genre\/movie\/18$/);
+    await expect(page.getByRole("heading", { name: "Drama Movies", level: 1 })).toBeVisible();
+    const grid = page.getByRole("list", { name: "Drama Movies" });
+    await expect(grid.getByRole("link", { name: /Lantern Harbor/ })).toBeVisible();
+    await expect(grid.getByRole("link", { name: /Paper Comet/ })).toHaveCount(0);
+    await grid.getByRole("link", { name: /Lantern Harbor/ }).click();
+    await expect(page).toHaveURL(/\/request\/movie\/9001$/);
+  });
+
+  test("shows work too, and a genre with nothing in it says so", async ({ page }) => {
+    await page.goto("/discover/genre/tv/18");
+    await expect(page.getByRole("heading", { name: "Drama Shows", level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Night Ferry/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Long Haul/ })).toBeVisible();
+    await page.goto("/discover/genre/movie/10765");
+    await expect(page.getByRole("heading", { name: "Nothing to show" })).toBeVisible();
+  });
+
+  test("odd addresses and bad numbers are refused", async ({ page, playwright, baseURL }) => {
+    await page.goto("/discover/genre/music/18");
+    await expect(page.getByRole("heading", { name: "Nothing here" })).toBeVisible();
+    expect((await page.request.get("/api/seerr/genres/movie")).status()).toBe(200);
+    expect((await page.request.get("/api/seerr/genres/music")).status()).toBe(404);
+    expect((await page.request.get("/api/seerr/discover/genre/music/18")).status()).toBe(404);
+    expect((await page.request.get("/api/seerr/discover/genre/movie/abc")).status()).toBe(400);
+    expect((await page.request.get("/api/seerr/discover/genre/movie/18?page=0")).status()).toBe(400);
+    const anon = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+    expect((await anon.get("/api/seerr/genres/movie")).status()).toBe(401);
+    expect((await anon.get("/api/seerr/discover/genre/movie/18")).status()).toBe(401);
+    await anon.dispose();
+  });
+});

@@ -205,6 +205,17 @@ const server = createServer((req, res) => {
     if ("a. person".includes(q) && q.length > 1) found.push({ id: 5, mediaType: "person", name: "A. Person" });
     return json(res, { page: 1, totalPages: 1, totalResults: found.length, results: found });
   }
+  const GENRES = { movie: { 18: "Drama", 16: "Animation", 35: "Comedy", 9648: "Mystery" }, tv: { 18: "Drama", 10765: "Sci-Fi & Fantasy" } };
+  const genreList = path.match(/^\/api\/v1\/genres\/(movie|tv)$/);
+  if (genreList) return json(res, Object.entries(GENRES[genreList[1]]).map(([id, name]) => ({ id: Number(id), name })));
+  const byGenre = path.match(/^\/api\/v1\/discover\/(movies|tv)\/genre\/(\d+)$/);
+  if (byGenre) {
+    const type = byGenre[1] === "movies" ? "movie" : "tv";
+    const name = GENRES[type][byGenre[2]];
+    const pick = (type === "movie" ? movies : shows).filter((t) => t.genres.includes(name));
+    const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== "mediaType"));
+    return json(res, { page: 1, totalPages: 1, totalResults: pick.length, results: pick.map((t) => strip(type === "movie" ? movieOut(t) : tvOut(t))) });
+  }
   const discoverRoute = path.match(/^\/api\/v1\/discover\/(trending|movies|tv|movies\/upcoming|tv\/upcoming)$/);
   if (discoverRoute) {
     const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== "mediaType"));
