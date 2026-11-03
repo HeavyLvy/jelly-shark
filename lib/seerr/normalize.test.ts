@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizePerson, normalizeRequests, normalizeSeasons, safePosterPath } from "./normalize";
+import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests, normalizeSeasons, safePosterPath } from "./normalize";
 
 describe("mapMediaStatus", () => {
   it.each([
@@ -202,5 +202,13 @@ describe("normalizeRequests", () => {
   it("skips rows it can't use", () => {
     expect(run({ id: 2 }, { id: 3, media: { tmdbId: 0, mediaType: "movie" } }, { id: 4, media: { tmdbId: 5, mediaType: "music" } }, null as never)).toEqual([]);
     expect(normalizeRequests(null)).toEqual([]);
+  });
+});
+
+describe("normalizeMixed", () => {
+  it("keeps movies and shows and drops people and junk", () => {
+    const out = normalizeMixed({ results: [{ id: 1, mediaType: "movie", title: "A" }, { id: 2, mediaType: "person", name: "P" }, { id: 3, mediaType: "tv", name: "B" }, null, { id: 4, title: "no type" }] });
+    expect(out.map((i) => [i.mediaType, i.id])).toEqual([["movie", 1], ["tv", 3]]);
+    expect(normalizeMixed(null)).toEqual([]);
   });
 });

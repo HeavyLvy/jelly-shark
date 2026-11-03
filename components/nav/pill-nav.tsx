@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { Home, LibraryBig, Music2, Search, type LucideIcon } from "lucide-react";
+import { Compass, Home, LibraryBig, Music2, Search, type LucideIcon } from "lucide-react";
 import { BrandIcon, useBrandName } from "@/components/ui/brand-icon";
 import { cn } from "@/components/ui/cn";
 import { HomeFilled } from "@/components/ui/home-filled";
+import { useSeerrEnabled } from "@/lib/queries/seerr";
 import { UserMenu } from "./user-menu";
 
 interface Tab {
@@ -28,6 +29,15 @@ const TABS: Tab[] = [
   { href: "/search", label: "Search", icon: Search, match: (p) => p.startsWith("/search") },
 ];
 
+/** Where people find things to request. Only there when Seerr is connected. */
+const DISCOVER_TAB: Tab = { href: "/discover", label: "Discover", icon: Compass, match: (p) => p.startsWith("/discover") };
+
+/** The tabs to show: Discover sits before Search when Seerr is on. */
+function useTabs(): Tab[] {
+  const seerr = useSeerrEnabled();
+  return seerr ? [...TABS.slice(0, 3), DISCOVER_TAB, TABS[3]!] : TABS;
+}
+
 function isActive(tab: Tab, activePath: string | null) {
   return activePath !== null && tab.match(activePath);
 }
@@ -38,6 +48,7 @@ function isActive(tab: Tab, activePath: string | null) {
  * content sit above it. Also used by Music, whose own tab bar stacks above it.
  */
 function PhoneTabs({ activePath }: { activePath: string | null }) {
+  const tabs = useTabs();
   useEffect(() => {
     const html = document.documentElement;
     html.setAttribute("data-app-tabs", "");
@@ -45,9 +56,9 @@ function PhoneTabs({ activePath }: { activePath: string | null }) {
   }, []);
   return (
     // Floating pill like Prime Video's: inset from the edges, active tab on a light capsule.
-    <nav aria-label="Primary" className="jelly fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-[18.5rem] rounded-full bg-bg/95 p-1.5 sm:hidden">
-      <ul className="grid grid-cols-4 gap-1">
-        {TABS.map((tab) => {
+    <nav aria-label="Primary" className={cn("jelly fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto rounded-full bg-bg/95 p-1.5 sm:hidden", tabs.length > 4 ? "max-w-[23rem]" : "max-w-[18.5rem]")}>
+      <ul className={cn("grid gap-1", tabs.length > 4 ? "grid-cols-5" : "grid-cols-4")}>
+        {tabs.map((tab) => {
           const active = isActive(tab, activePath);
           const Icon = tab.icon;
           return (
@@ -107,6 +118,7 @@ function NavShell({ activePath }: { activePath: string | null }) {
 }
 
 function DesktopPill({ activePath, brandName }: { activePath: string | null; brandName: string }) {
+  const tabs = useTabs();
   return (
     <nav
       aria-label="Primary"
@@ -122,7 +134,7 @@ function DesktopPill({ activePath, brandName }: { activePath: string | null; bra
       >
         <BrandIcon className="size-6" />
       </Link>
-      {TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = isActive(tab, activePath);
         const Icon = tab.icon;
         return (

@@ -442,3 +442,60 @@ test.describe("My requests", () => {
     await anon.dispose();
   });
 });
+
+test.describe("Discover", () => {
+  const rowOf = (page: Page, name: string) => page.getByRole("region", { name });
+
+  test("shows trending, popular and upcoming rows of titles to request", async ({ page }) => {
+    await page.goto("/discover");
+    await expect(page.getByRole("heading", { name: "Discover", level: 1 })).toBeVisible();
+    // Trending mixes movies and shows, and leaves people out.
+    const trending = rowOf(page, "Trending");
+    await expect(trending.getByRole("link", { name: /Lantern Harbor, Movie/ })).toBeVisible();
+    await expect(trending.getByRole("link", { name: /Night Ferry, TV show/ })).toBeVisible();
+    await expect(trending).not.toContainText("A. Person");
+    // Rows that leave `mediaType` out still know what each title is.
+    await expect(rowOf(page, "Popular Shows").getByRole("link", { name: /Night Ferry, TV show/ })).toBeVisible();
+    await expect(rowOf(page, "Popular Movies").getByRole("link", { name: /Paper Comet, Movie, 2021, Available/ })).toBeVisible();
+    await expect(rowOf(page, "Upcoming Movies").getByRole("link", { name: /Tide Table/ })).toBeVisible();
+    // A row with nothing in it is left out.
+    await expect(page.getByRole("heading", { name: "Upcoming Shows" })).toHaveCount(0);
+    await trending.getByRole("link", { name: /Lantern Harbor/ }).click();
+    await expect(page).toHaveURL(/\/request\/movie\/9001$/);
+  });
+
+  test("a Discover tab appears only when Seerr is connected", async ({ page, baseURL }) => {
+    const nav = page.getByRole("navigation", { name: "Primary" }).locator("visible=true");
+    await page.goto("/");
+    await expect(nav.getByRole("link", { name: "Discover" })).toBeVisible();
+    await nav.getByRole("link", { name: "Discover" }).click();
+    await expect(page).toHaveURL(/\/discover$/);
+    await expect(nav.getByRole("link", { name: "Discover" })).toHaveAttribute("aria-current", "page");
+    // Everything in the tab bar fits on screen.
+    for (const link of await nav.getByRole("link").all()) {
+      const box = await link.boundingBox();
+      expect(box && box.x >= 0 && box.x + box.width <= page.viewportSize()!.width).toBe(true);
+    }
+
+    await page.request.delete("/api/seerr-config", { headers: { origin: baseURL! } });
+    const status = page.waitForResponse((r) => r.url().includes("/api/seerr/status"));
+    await page.goto("/");
+    await status;
+    await expect(nav.getByRole("link", { name: "Search" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Discover" })).toHaveCount(0);
+    await page.goto("/discover");
+    await expect(page.getByRole("heading", { name: "Discover isn't set up" })).toBeVisible();
+  });
+
+  test("the rows come from fixed routes only", async ({ page, playwright, baseURL }) => {
+    const ok = await page.request.get("/api/seerr/discover/trending");
+    expect(ok.status()).toBe(200);
+    expect(JSON.stringify(await ok.json())).not.toContain("A. Person");
+    for (const bad of ["nope", "__proto__", "constructor", "movies%2Fupcoming"]) {
+      expect((await page.request.get(`/api/seerr/discover/${bad}`)).status(), bad).toBe(404);
+    }
+    const anon = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+    expect((await anon.get("/api/seerr/discover/trending")).status()).toBe(401);
+    await anon.dispose();
+  });
+});
