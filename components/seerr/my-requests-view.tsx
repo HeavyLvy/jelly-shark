@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { CancelRequest } from "./cancel-request";
 import { ArtFallback } from "@/components/media/bits";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
@@ -137,48 +138,55 @@ function RequestRow({ request: r }: { request: SeerrRequestRow }) {
       : `/show/${r.jellyfinId}`
     : null;
   return (
-    <li className="flex items-center gap-4 py-3">
-      <Link
-        href={seerrHref(r.mediaType, r.tmdbId)}
-        className="flex min-w-0 flex-1 items-center gap-4 rounded-card outline-offset-4"
-        aria-label={`${item?.title ?? kind}, ${STATE_LABEL[r.state]}`}
-      >
-        <div className="relative aspect-[2/3] w-14 shrink-0 overflow-hidden rounded-card bg-surface ring-1 ring-hairline sm:w-16">
-          {item?.posterPath ? (
-            // eslint-disable-next-line @next/next/no-img-element -- a poster served by our own server
-            <img
-              src={seerrImageSrc(item.posterPath, "w185")}
-              alt=""
-              loading="lazy"
-              className="absolute inset-0 size-full object-cover"
-            />
-          ) : item ? (
-            <ArtFallback title={item.title} />
-          ) : null}
-        </div>
-        <div className="min-w-0">
-          {item ? (
-            <p className="truncate font-medium text-text">{item.title}</p>
-          ) : (
-            <Skeleton className="h-5 w-40" />
-          )}
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted">{sub}</p>
-          <StatePill state={r.state} className="mt-2 sm:hidden" />
-        </div>
-      </Link>
-      <StatePill state={r.state} className="max-sm:hidden" />
-      {open && (
+    <li className="py-3">
+      <div className="flex items-center gap-4">
         <Link
-          href={open}
-          className={buttonClasses({
-            variant: "primary",
-            size: "sm",
-            className: "shrink-0",
-          })}
+          href={seerrHref(r.mediaType, r.tmdbId)}
+          className="flex min-w-0 flex-1 items-center gap-4 rounded-card outline-offset-4"
+          aria-label={`${item?.title ?? kind}, ${STATE_LABEL[r.state]}`}
         >
-          {r.mediaType === "movie" ? "Play" : "Open"}
-          <span className="sr-only">{item ? ` ${item.title}` : ""}</span>
+          <div className="relative aspect-[2/3] w-14 shrink-0 overflow-hidden rounded-card bg-surface ring-1 ring-hairline sm:w-16">
+            {item?.posterPath ? (
+              // eslint-disable-next-line @next/next/no-img-element -- a poster served by our own server
+              <img
+                src={seerrImageSrc(item.posterPath, "w185")}
+                alt=""
+                loading="lazy"
+                className="absolute inset-0 size-full object-cover"
+              />
+            ) : item ? (
+              <ArtFallback title={item.title} />
+            ) : null}
+          </div>
+          <div className="min-w-0">
+            {item ? (
+              <p className="truncate font-medium text-text">{item.title}</p>
+            ) : (
+              <Skeleton className="h-5 w-40" />
+            )}
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted">{sub}</p>
+            <StatePill state={r.state} className="mt-2 sm:hidden" />
+          </div>
         </Link>
+        <StatePill state={r.state} className="max-sm:hidden" />
+        {open && (
+          <Link
+            href={open}
+            className={buttonClasses({
+              variant: "primary",
+              size: "sm",
+              className: "shrink-0",
+            })}
+          >
+            {r.mediaType === "movie" ? "Play" : "Open"}
+            <span className="sr-only">{item ? ` ${item.title}` : ""}</span>
+          </Link>
+        )}
+      </div>
+      {r.state === "waiting" && (
+        <div className="mt-2 pl-[4.5rem] sm:pl-20">
+          <CancelRequest ids={[r.id]} title={item?.title ?? kind} />
+        </div>
       )}
     </li>
   );

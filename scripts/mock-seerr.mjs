@@ -82,6 +82,7 @@ function episodesOf(show, n) {
 }
 /** Requests made since start, as Seerr keeps them. Tests read and clear them through /mock/requests. */
 let requests = [];
+let nextId = 1;
 
 const isAdmin = (userId) => (users.find((u) => u.id === userId)?.permissions & ADMIN) !== 0;
 
@@ -161,7 +162,7 @@ const server = createServer((req, res) => {
   if (path === "/mock/requests" && req.method === "POST") {
     // Test helper: add a request as it would exist already (any status, any person).
     return readBody(req, (b) => {
-      requests.push({ id: requests.length + 1, mediaType: b.mediaType, mediaId: b.mediaId, seasons: b.seasons ?? [], status: b.status ?? 1, by: b.by ?? 1, body: b, createdAt: b.createdAt ?? new Date().toISOString() });
+      requests.push({ id: nextId++, mediaType: b.mediaType, mediaId: b.mediaId, seasons: b.seasons ?? [], status: b.status ?? 1, by: b.by ?? 1, body: b, createdAt: b.createdAt ?? new Date().toISOString() });
       json(res, requests.at(-1), 201);
     });
   }
@@ -245,6 +246,19 @@ const server = createServer((req, res) => {
     return json(res, { id: person.id, cast: [...asCast, ...asCast.slice(0, 1)], crew: asCrew });
   }
 
+  const oneRequest = path.match(/^\/api\/v1\/request\/(\d+)$/);
+  if (oneRequest) {
+    const r = requests.find((x) => x.id === Number(oneRequest[1]));
+    if (!r) return json(res, { message: "Request not found." }, 404);
+    if (req.method === "DELETE") {
+      // Seerr lets people delete their own waiting requests, and administrators anyone's.
+      if (!isAdmin(asUser ?? 1) && !(r.by === asUser && r.status === 1)) return json(res, { message: "You do not have permission to modify this request." }, 403);
+      requests = requests.filter((x) => x !== r);
+      res.writeHead(204);
+      return res.end();
+    }
+    return json(res, { id: r.id, status: r.status, type: r.mediaType, requestedBy: { id: r.by }, media: { tmdbId: r.mediaId, mediaType: r.mediaType } });
+  }
   if (path === "/api/v1/request" && req.method === "GET") {
     // Like Seerr, an administrator gets everyone's requests unless `requestedBy` says whose.
     const by = u.searchParams.get("requestedBy");
@@ -268,7 +282,7 @@ const server = createServer((req, res) => {
         if (!Array.isArray(body.seasons) || body.seasons.length === 0 || body.seasons.every((n) => taken.has(n))) return json(res, { message: "No seasons available to request" }, 202);
       }
       // Seerr approves an administrator's requests straight away; everyone else waits.
-      const request = { id: requests.length + 1, mediaType: body.mediaType, mediaId: body.mediaId, seasons: body.seasons ?? [], status: isAdmin(who) ? 2 : 1, by: who, body, createdAt: new Date().toISOString() };
+      const request = { id: nextId++, mediaType: body.mediaType, mediaId: body.mediaId, seasons: body.seasons ?? [], status: isAdmin(who) ? 2 : 1, by: who, body, createdAt: new Date().toISOString() };
       requests.push(request);
       json(res, { id: request.id, status: request.status, requestedBy: { id: who } }, 201);
     });

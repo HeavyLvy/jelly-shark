@@ -11,10 +11,11 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
 import { formatRating } from "@/lib/format";
-import { seerrImageSrc, useSeerrDetail, useSeerrRequest } from "@/lib/queries/seerr";
+import { seerrImageSrc, useSeerrDetail, useSeerrRequest, useSeerrRequests } from "@/lib/queries/seerr";
 import { watchHref } from "@/lib/routes";
 import { formatDay, formatMinutes, formatMoney, languageName, plural, yearsOf } from "@/lib/seerr/format";
 import { isRequestable, type SeerrDetail, type SeerrMediaType, type SeerrRequestResult } from "@/lib/seerr/types";
+import { CancelRequest } from "./cancel-request";
 import { SeasonPicker } from "./season-picker";
 import { SeerrEpisodes } from "./seerr-episodes";
 import { SeerrCastRow, SeerrRelatedRow } from "./seerr-rows";
@@ -98,6 +99,9 @@ function TitleDetail({ detail: d }: { detail: SeerrDetail }) {
   const isTv = item.mediaType === "tv";
   const request = useSeerrRequest();
   const [picker, setPicker] = useState(false);
+  // Your own requests for this title that nobody has approved yet; those can still be taken back.
+  const mine = useSeerrRequests();
+  const waitingIds = mine.data?.filter((r) => r.state === "waiting" && r.mediaType === item.mediaType && r.tmdbId === item.id).map((r) => r.id) ?? [];
   const [sent, setSent] = useState<SeerrRequestResult["status"] | null>(null);
   const error = request.error instanceof ApiError ? request.error.message : request.isError ? "Couldn't send the request. Try again." : null;
 
@@ -181,6 +185,7 @@ function TitleDetail({ detail: d }: { detail: SeerrDetail }) {
                 Request seasons
               </Button>
             )}
+            {waitingIds.length > 0 && <CancelRequest ids={waitingIds} title={item.title} size="lg" onDone={() => setSent(null)} />}
             {d.trailerUrl && (
               <a href={d.trailerUrl} target="_blank" rel="noopener noreferrer" aria-label="Watch trailer (opens in a new tab)" className={trailerClass}>
                 <Clapperboard className="size-4 max-sm:size-5" aria-hidden="true" />

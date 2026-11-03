@@ -14,7 +14,7 @@ export interface SeerrReply {
  * on the request). No redirects, a time limit and a size limit, since this
  * server makes the request. Throws only when Seerr can't be reached.
  */
-export async function seerrCall(config: SeerrConfig, path: string, opts: { method?: "GET" | "POST"; body?: unknown; asUser?: number } = {}): Promise<SeerrReply> {
+export async function seerrCall(config: SeerrConfig, path: string, opts: { method?: "GET" | "POST" | "DELETE"; body?: unknown; asUser?: number } = {}): Promise<SeerrReply> {
   const headers: Record<string, string> = { accept: "application/json", "x-api-key": config.apiKey };
   if (opts.asUser !== undefined) headers["x-api-user"] = String(opts.asUser);
   if (opts.body !== undefined) headers["content-type"] = "application/json";

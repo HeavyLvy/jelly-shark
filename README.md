@@ -182,7 +182,8 @@ HTTPS pages (or `localhost`). Over plain HTTP they can only add a shortcut. iPho
   already in your library are marked *Available*.
 - **My requests:** *My requests* in the account menu lists what you've asked for, newest first, with where each
   stands (waiting for approval, approved, declined, or available). The menu shows how many are still open. Once a title
-  is in the library it has a *Play* or *Open* button. It only ever shows your own requests.
+  is in the library it has a *Play* or *Open* button. It only ever shows your own requests. A request that is still waiting for approval can be cancelled there, or on the
+  title's page, after a confirm step; once it's approved, Seerr handles it.
 - **Keyboard shortcuts:** *Shortcuts & gestures* in the account menu lists them. Space plays or pauses, and the arrow
   keys seek and change volume.
 - **Settings** (playback quality, languages, subtitle style, poster size, which rows Home shows) are saved per user on

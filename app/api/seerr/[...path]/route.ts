@@ -21,6 +21,7 @@ import type { SeerrDiscoverKind, SeerrItem, SeerrMediaType, SeerrRequestBody } f
  *   GET  /api/seerr/discover/<row>       trending | movies | tv | upcoming-movies | upcoming-tv
  *   GET  /api/seerr/requests             your own requests, newest first
  *   POST /api/seerr/request              ask for a movie, or seasons of a show
+ *   DELETE /api/seerr/request/<id>       cancel one of your own requests that is still waiting
  *   GET  /api/seerr/image/<size>/<file>  a poster, fetched through Seerr
  */
 
@@ -147,6 +148,34 @@ async function makeRequest(req: NextRequest): Promise<Response> {
   }
 }
 
+/**
+ * Cancels a request, but only one that is the signed-in person's own and still
+ * waiting for approval. Seerr's key acts as them, and an administrator account
+ * could delete anything, so this checks first instead of trusting that.
+ */
+async function cancelRequest(req: NextRequest, rawId: string): Promise<Response> {
+  if (!isSameOrigin(req)) return jsonError(403, "cross_origin");
+  const id = parseId(rawId);
+  if (id === null) return jsonError(400, "bad_id");
+  const ctx = await requireSeerrUser();
+  if (ctx instanceof Response) return ctx;
+  if (rateLimited(`seerr-cancel:${ctx.jellyfinUserId}`, 30, 60_000)) return jsonError(429, "slow_down", { message: "Too many changes at once. Wait a minute and try again." });
+  try {
+    const found = await seerrCall(ctx.config, `/request/${id}`, { asUser: ctx.seerrUserId });
+    if (found.status === 404) return jsonError(404, "not_found");
+    if (found.status !== 200 || typeof found.data !== "object" || found.data === null) return jsonError(502, "seerr_error");
+    const r = found.data as { status?: unknown; requestedBy?: { id?: unknown } | null };
+    if (r.requestedBy?.id !== ctx.seerrUserId) return jsonError(403, "not_yours", { message: "That isn't your request." });
+    if (r.status !== 1) return jsonError(409, "not_waiting", { message: "That request has already been handled, so it can't be cancelled." });
+    const gone = await seerrCall(ctx.config, `/request/${id}`, { method: "DELETE", asUser: ctx.seerrUserId });
+    if (gone.status === 204 || gone.status === 200 || gone.status === 404) return NextResponse.json({ ok: true }, { headers: noStore });
+    if (gone.status === 403) return jsonError(403, "no_permission", { message: seerrMessage(gone.data) ?? "You can't cancel that request." });
+    return jsonError(502, "seerr_error", { message: seerrMessage(gone.data) ?? undefined });
+  } catch {
+    return jsonError(502, "upstream_unreachable");
+  }
+}
+
 async function image(size: string, file: string): Promise<Response> {
   if (!IMAGE_SIZES.has(size) || !/^[A-Za-z0-9_-]{1,80}\.(?:jpg|png)$/.test(file)) return jsonError(400, "bad_path");
   const base = await requireSignedIn();
@@ -183,6 +212,12 @@ export async function GET(req: NextRequest) {
   if (parts.length === 2 && first === "person") return person(second, false);
   if (parts.length === 3 && first === "person" && third === "credits") return person(second, true);
   if (parts.length === 3 && first === "image") return image(second, third);
+  return jsonError(404, "not_found");
+}
+
+export async function DELETE(req: NextRequest) {
+  const parts = req.nextUrl.pathname.slice(SEERR_PROXY_PREFIX.length).split("/").filter(Boolean);
+  if (parts.length === 2 && parts[0] === "request") return cancelRequest(req, parts[1]!);
   return jsonError(404, "not_found");
 }
 
