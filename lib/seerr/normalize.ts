@@ -1,4 +1,4 @@
-import type { SeerrCredits, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPerson, SeerrPersonDetail, SeerrSeason, SeerrStatus } from "./types";
+import type { SeerrCredits, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPerson, SeerrPersonDetail, SeerrRequestRow, SeerrSeason, SeerrStatus } from "./types";
 
 /** Pure helpers that turn Seerr's replies into the small shapes in ./types. */
 
@@ -247,4 +247,29 @@ export function normalizeCredits(raw: unknown): SeerrCredits {
   const acting = arr(c.cast);
   const roles = acting.filter((x) => !(isObj(x) && APPEARANCE.test(str(x.character))));
   return { cast: one(roles.length >= 4 ? roles : acting, known, 60), crew: one(arr(c.crew), newest, 40) };
+}
+
+/** A page of Seerr's requests as rows; anything unexpected is skipped. Newest first. */
+export function normalizeRequests(raw: unknown): SeerrRequestRow[] {
+  const rows: SeerrRequestRow[] = [];
+  for (const r of arr(isObj(raw) ? raw.results : null)) {
+    if (!isObj(r) || !isObj(r.media)) continue;
+    const mediaType = r.media.mediaType === "movie" || r.media.mediaType === "tv" ? (r.media.mediaType as SeerrMediaType) : null;
+    const tmdbId = r.media.tmdbId;
+    if (!mediaType || typeof r.id !== "number" || typeof tmdbId !== "number" || !Number.isInteger(tmdbId) || tmdbId <= 0) continue;
+    // 3 is declined; a title that reached the library counts as available whatever the request says.
+    const state = r.status === 3 ? "declined" : r.media.status === 5 ? "available" : r.status === 2 ? "approved" : "waiting";
+    const seasons = arr(r.seasons).flatMap((s) => (isObj(s) && typeof s.seasonNumber === "number" && s.seasonNumber > 0 ? [s.seasonNumber] : []));
+    const jf = r.media.jellyfinMediaId;
+    rows.push({
+      id: r.id,
+      mediaType,
+      tmdbId,
+      state,
+      seasons: mediaType === "tv" ? seasons.sort((a, b) => a - b) : [],
+      createdAt: typeof r.createdAt === "string" && !Number.isNaN(Date.parse(r.createdAt)) ? new Date(r.createdAt).toISOString() : null,
+      jellyfinId: state === "available" && typeof jf === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(jf) ? jf : null,
+    });
+  }
+  return rows;
 }

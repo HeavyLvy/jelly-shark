@@ -3,13 +3,14 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Download, History, Keyboard, LogOut, Settings, Smartphone, UserPlus } from "lucide-react";
+import { Check, ChevronDown, Download, History, Inbox, Keyboard, LogOut, Settings, Smartphone, UserPlus } from "lucide-react";
 import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
 import { OPEN_SHORTCUTS } from "@/components/shortcuts-dialog";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/components/ui/cn";
 import { ApiError, hardNavigate } from "@/lib/api-client";
 import { avatarUrl, useLogout, useMe, useSwitchAccount } from "@/lib/queries/auth";
+import { useSeerrEnabled, useSeerrRequests } from "@/lib/queries/seerr";
 import { useInstall } from "@/lib/use-install";
 
 const itemClass =
@@ -31,6 +32,10 @@ export function UserMenu({ floating }: { floating?: boolean } = {}) {
   const menuRef = useRef<HTMLDivElement>(null);
   const busy = switchAccount.isPending || logout.isPending;
   const { installed, install } = useInstall();
+  const seerr = useSeerrEnabled();
+  const requests = useSeerrRequests(seerr);
+  // Requests still waiting on someone, as a hint beside the link.
+  const openRequests = requests.data?.filter((r) => r.state === "waiting" || r.state === "approved").length ?? 0;
 
   const close = (returnFocus: boolean) => {
     setOpen(false);
@@ -177,6 +182,17 @@ export function UserMenu({ floating }: { floating?: boolean } = {}) {
             <History className="size-4" aria-hidden="true" />
             Watch history
           </Link>
+          {seerr && (
+            <Link role="menuitem" href="/requests" onClick={() => setOpen(false)} className={cn(itemClass, "text-text-secondary hover:text-text")}>
+              <Inbox className="size-4" aria-hidden="true" />
+              <span className="flex-1">My requests</span>
+              {openRequests > 0 && (
+                <span aria-label={`${openRequests} in progress`} className="rounded-full bg-overlay px-2 py-0.5 text-xs font-semibold text-text">
+                  {openRequests}
+                </span>
+              )}
+            </Link>
+          )}
           <Link role="menuitem" href="/settings" onClick={() => setOpen(false)} className={cn(itemClass, "text-text-secondary hover:text-text")}>
             <Settings className="size-4" aria-hidden="true" />
             Settings

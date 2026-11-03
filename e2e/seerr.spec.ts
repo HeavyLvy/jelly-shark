@@ -358,3 +358,87 @@ test.describe("accounts in Settings", () => {
     await expect(guest).toContainText("No Seerr account yet");
   });
 });
+
+test.describe("My requests", () => {
+  const seed = (page: Page, data: object) => page.request.post(`${MOCK}/mock/requests`, { data });
+
+  test("starts empty and links to Search", async ({ page }) => {
+    const answered = page.waitForResponse((r) => r.url().includes("/api/seerr/requests"));
+    await page.goto("/requests");
+    await answered;
+    await expect(page.getByRole("heading", { name: "My requests", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "You haven't requested anything" })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("link", { name: "Search", exact: true })).toBeVisible();
+  });
+
+  test("lists requests with where each stands, and filters them", async ({ page }) => {
+    await seed(page, { mediaType: "movie", mediaId: 9001, status: 1 });
+    await seed(page, { mediaType: "tv", mediaId: 9102, seasons: [1, 2], status: 2 });
+    await seed(page, { mediaType: "movie", mediaId: 9003, status: 3 });
+    await seed(page, { mediaType: "movie", mediaId: 9002, status: 2 });
+    await page.goto("/requests");
+    const list = page.getByRole("list", { name: "Requests" });
+    await expect(list.getByRole("link", { name: "Lantern Harbor, Waiting for approval" })).toBeVisible();
+    await expect(list.getByRole("link", { name: "Long Haul, Approved" })).toBeVisible();
+    await expect(list.getByRole("link", { name: "Tide Table, Declined" })).toBeVisible();
+    await expect(list.getByRole("link", { name: "Paper Comet, Available" })).toBeVisible();
+    await expect(list).toContainText("Seasons 1 and 2");
+    // Only a title that reached the library can be played.
+    await expect(list.getByRole("link", { name: /^Play/ })).toHaveCount(1);
+    await expect(list.getByRole("link", { name: /^Play/ })).toHaveAttribute("href", "/watch/m001");
+
+    await page.getByRole("button", { name: /^Declined/ }).click();
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    await expect(list).toContainText("Tide Table");
+    await page.getByRole("button", { name: /^All/ }).click();
+    await expect(list.getByRole("listitem")).toHaveCount(4);
+
+    await list.getByRole("link", { name: "Lantern Harbor, Waiting for approval" }).click();
+    await expect(page).toHaveURL(/\/request\/movie\/9001$/);
+  });
+
+  test("shows what you just requested", async ({ page }) => {
+    await page.goto("/request/movie/9001");
+    await page.getByRole("button", { name: "Request", exact: true }).click();
+    await expect(page.getByText("Approved", { exact: false }).first()).toBeVisible();
+    await page.goto("/requests");
+    await expect(page.getByRole("list", { name: "Requests" }).getByRole("listitem")).toHaveCount(1);
+    await expect(page.getByRole("link", { name: /Lantern Harbor/ })).toBeVisible();
+  });
+
+  test("the account menu links to it with a count of what is still open", async ({ page }) => {
+    await seed(page, { mediaType: "movie", mediaId: 9001, status: 1 });
+    await seed(page, { mediaType: "movie", mediaId: 9003, status: 3 });
+    await page.goto("/");
+    await page.getByRole("button", { name: /Account menu/ }).click();
+    const link = page.getByRole("menuitem", { name: /My requests/ });
+    await expect(link).toBeVisible();
+    await expect(link.getByLabel("1 in progress")).toBeVisible();
+    await link.click();
+    await expect(page).toHaveURL(/\/requests$/);
+  });
+
+  test("is hidden from the menu, and says so on the page, when Seerr is off", async ({ page, baseURL }) => {
+    await page.request.delete("/api/seerr-config", { headers: { origin: baseURL! } });
+    const status = page.waitForResponse((r) => r.url().includes("/api/seerr/status"));
+    await page.goto("/");
+    await status;
+    await page.getByRole("button", { name: /Account menu/ }).click();
+    await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: /My requests/ })).toHaveCount(0);
+    await page.goto("/requests");
+    await expect(page.getByRole("heading", { name: "Requests aren't set up" })).toBeVisible();
+  });
+
+  test("only ever lists your own requests", async ({ page }) => {
+    await seed(page, { mediaType: "movie", mediaId: 9001, status: 1, by: 2 });
+    const res = await page.request.get("/api/seerr/requests");
+    expect((await res.json()).requests).toEqual([]);
+  });
+
+  test("needs a sign-in", async ({ playwright, baseURL }) => {
+    const anon = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+    expect((await anon.get("/api/seerr/requests")).status()).toBe(401);
+    await anon.dispose();
+  });
+});
