@@ -4,8 +4,8 @@ import { rateLimited } from "@/lib/rate-limit";
 import { SEERR_PROXY_PREFIX } from "@/lib/constants";
 import { seerrCall, seerrMessage } from "@/lib/seerr/client";
 import { requireSeerrUser, requireSignedIn } from "@/lib/seerr/context";
-import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizePerson, normalizeRequests } from "@/lib/seerr/normalize";
-import type { SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/types";
+import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests } from "@/lib/seerr/normalize";
+import type { SeerrDiscoverKind, SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/types";
 
 /**
  * Jelly Shark's own Seerr API for the browser. It is NOT a pass-through: each
@@ -18,6 +18,7 @@ import type { SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/ty
  *   GET  /api/seerr/<movie|tv>/<id>/recommendations | similar
  *   GET  /api/seerr/tv/<id>/season/<n>   a season's episodes
  *   GET  /api/seerr/person/<id>[/credits] a person and the titles they're in
+ *   GET  /api/seerr/discover/<row>       trending | movies | tv | upcoming-movies | upcoming-tv
  *   GET  /api/seerr/requests             your own requests, newest first
  *   POST /api/seerr/request              ask for a movie, or seasons of a show
  *   GET  /api/seerr/image/<size>/<file>  a poster, fetched through Seerr
@@ -84,6 +85,21 @@ async function lookup<T>(path: string, shape: (data: unknown) => T | null): Prom
   } catch {
     return jsonError(502, "upstream_unreachable");
   }
+}
+
+/** Seerr's own paths for each Discover row, and the kind of title a row holds (`null`: a mix, which says so itself). */
+const DISCOVER: Record<SeerrDiscoverKind, { path: string; type: SeerrMediaType | null }> = {
+  trending: { path: "/discover/trending", type: null },
+  movies: { path: "/discover/movies", type: "movie" },
+  tv: { path: "/discover/tv", type: "tv" },
+  "upcoming-movies": { path: "/discover/movies/upcoming", type: "movie" },
+  "upcoming-tv": { path: "/discover/tv/upcoming", type: "tv" },
+};
+
+async function discover(kind: string): Promise<Response> {
+  const row = Object.hasOwn(DISCOVER, kind) ? DISCOVER[kind as SeerrDiscoverKind] : null;
+  if (!row) return jsonError(404, "not_found");
+  return lookup(`${row.path}?page=1`, (d) => ({ results: (row.type ? normalizeList(d, row.type) : normalizeMixed(d)).slice(0, 20) }));
 }
 
 /** The signed-in person's own requests. Seerr gives an administrator everyone's unless told whose to list. */
@@ -160,6 +176,7 @@ export async function GET(req: NextRequest) {
   }
   if (parts.length === 1 && first === "search") return search(req);
   if (parts.length === 1 && first === "requests") return myRequests();
+  if (parts.length === 2 && first === "discover") return discover(second);
   if (parts.length === 2 && isTitle) return detail(first, second);
   if (parts.length === 3 && isTitle) return related(first, second, third);
   if (parts.length === 4 && first === "tv" && third === "season") return season(second, fourth);

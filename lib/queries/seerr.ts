@@ -2,13 +2,14 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
-import type { SeerrCredits, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPersonDetail, SeerrRequestBody, SeerrRequestResult, SeerrRequestRow, SeerrSearchResult } from "@/lib/seerr/types";
+import type { SeerrCredits, SeerrDiscoverKind, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPersonDetail, SeerrRequestBody, SeerrRequestResult, SeerrRequestRow, SeerrSearchResult } from "@/lib/seerr/types";
 import { useJfQuery } from "./use-jf-query";
 
 export const seerrKeys = {
   all: ["seerr"] as const,
   status: ["seerr", "status"] as const,
   requests: ["seerr", "requests"] as const,
+  discover: (kind: SeerrDiscoverKind) => ["seerr", "discover", kind] as const,
   search: (term: string) => ["seerr", "search", term] as const,
   detail: (type: SeerrMediaType, id: number) => ["seerr", "detail", type, id] as const,
   related: (type: SeerrMediaType, id: number, kind: string) => ["seerr", "related", type, id, kind] as const,
@@ -77,6 +78,15 @@ export function useSeerrCredits(id: number) {
   return useJfQuery<SeerrCredits>({
     queryKey: seerrKeys.credits(id),
     queryFn: ({ signal }) => apiFetch<SeerrCredits>(`/api/seerr/person/${id}/credits`, { signal }),
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** One Discover row: trending, popular or upcoming titles. */
+export function useSeerrDiscover(kind: SeerrDiscoverKind) {
+  return useJfQuery<SeerrItem[]>({
+    queryKey: seerrKeys.discover(kind),
+    queryFn: async ({ signal }) => (await apiFetch<SeerrSearchResult>(`/api/seerr/discover/${kind}`, { signal })).results,
     staleTime: 10 * 60_000,
   });
 }

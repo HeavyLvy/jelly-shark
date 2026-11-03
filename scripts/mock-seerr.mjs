@@ -204,6 +204,25 @@ const server = createServer((req, res) => {
     if ("a. person".includes(q) && q.length > 1) found.push({ id: 5, mediaType: "person", name: "A. Person" });
     return json(res, { page: 1, totalPages: 1, totalResults: found.length, results: found });
   }
+  const discoverRoute = path.match(/^\/api\/v1\/discover\/(trending|movies|tv|movies\/upcoming|tv\/upcoming)$/);
+  if (discoverRoute) {
+    const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== "mediaType"));
+    const page = (results) => json(res, { page: 1, totalPages: 1, totalResults: results.length, results });
+    switch (discoverRoute[1]) {
+      // Trending mixes movies, shows and people, and says what each is.
+      case "trending":
+        return page([movieOut(movies[0]), tvOut(shows[0]), { id: 5, mediaType: "person", name: "A. Person" }, movieOut(movies[1])]);
+      // The other rows leave `mediaType` out, as Seerr does.
+      case "movies":
+        return page(movies.slice(0, 2).map((m) => strip(movieOut(m))));
+      case "tv":
+        return page(shows.map((t) => strip(tvOut(t))));
+      case "movies/upcoming":
+        return page([strip(movieOut(movies[2]))]);
+      default:
+        return page([]);
+    }
+  }
   const titleRoute = path.match(/^\/api\/v1\/(movie|tv)\/(\d+)(?:\/(recommendations|similar|season\/(\d+)))?$/);
   if (titleRoute) {
     const [, type, rawId, sub, seasonN] = titleRoute;

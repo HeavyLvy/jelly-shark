@@ -116,6 +116,9 @@ export interface SeerrRequestRow {
   jellyfinId: string | null;
 }
 
+/** The rows on the Discover page. */
+export type SeerrDiscoverKind = "trending" | "movies" | "tv" | "upcoming-movies" | "upcoming-tv";
+
 export interface SeerrSearchResult {
   results: SeerrItem[];
 }

@@ -177,6 +177,9 @@ HTTPS pages (or `localhost`). Over plain HTTP they can only add a shortcut. iPho
   *Play* or *Go to show* instead. You request as your own Seerr account, so Seerr's permissions, quotas and approvals
   apply. Titles that are fully in your library are left out of search, and none of this appears when Seerr isn't
   connected.
+- **Discover:** with Seerr connected, a *Discover* tab appears in the navigation. It has rows for what's trending,
+  popular movies and shows, and what's coming soon. Every title opens its own page, where it can be requested. Titles
+  already in your library are marked *Available*.
 - **My requests:** *My requests* in the account menu lists what you've asked for, newest first, with where each
   stands (waiting for approval, approved, declined, or available). The menu shows how many are still open. Once a title
   is in the library it has a *Play* or *Open* button. It only ever shows your own requests.

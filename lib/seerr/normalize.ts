@@ -188,6 +188,11 @@ export function normalizeList(raw: unknown, mediaType: SeerrMediaType): SeerrIte
   return results.map((r) => normalizeItem(isObj(r) ? { mediaType, ...r } : null)).filter((i): i is SeerrItem => i !== null);
 }
 
+/** A list where every result says what it is (Discover's trending row); people are left out. */
+export function normalizeMixed(raw: unknown): SeerrItem[] {
+  return (isObj(raw) ? arr(raw.results) : []).map(normalizeItem).filter((i): i is SeerrItem => i !== null);
+}
+
 /** One season's episodes. */
 export function normalizeEpisodes(raw: unknown): SeerrEpisode[] {
   const list = isObj(raw) ? arr(raw.episodes) : [];
