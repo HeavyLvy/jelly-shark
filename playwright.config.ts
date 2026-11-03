@@ -33,7 +33,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "desktop",
-      testMatch: /(desktop|shared|install|player)\.spec\.ts/,
+      testMatch: /(desktop|shared|install|player|seerr)\.spec\.ts/,
       dependencies: ["setup"],
       use: { browserName: "chromium", viewport: { width: 1280, height: 800 }, storageState: "e2e/.auth/state.json", launchOptions: CHROMIUM_AUTOPLAY },
     },
@@ -46,7 +46,7 @@ export default defineConfig({
     },
     {
       name: "phone",
-      testMatch: /(phone|shared|install|player)\.spec\.ts/,
+      testMatch: /(phone|shared|install|player|seerr)\.spec\.ts/,
       dependencies: ["setup"],
       use: { browserName: "chromium", viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, storageState: "e2e/.auth/state.json", launchOptions: CHROMIUM_AUTOPLAY },
     },

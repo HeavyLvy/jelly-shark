@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { ApiError, apiFetch } from "@/lib/api-client";
+import { seerrKeys } from "@/lib/queries/seerr";
+import { SeerrAccounts } from "./seerr-accounts";
 
 interface SeerrConfig {
   configured: boolean;
@@ -15,6 +18,7 @@ const INPUT = "h-11 min-w-0 flex-1 basis-64 rounded-card border border-hairline-
 
 /** Connect Jelly Shark to a Seerr server (administrators only; the server checks too). */
 export function SeerrSection() {
+  const qc = useQueryClient();
   const [config, setConfig] = useState<SeerrConfig | null>(null);
   const [url, setUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -45,6 +49,7 @@ export function SeerrSection() {
       setConfig(next);
       setUrl(next.url ?? "");
       setApiKey("");
+      void qc.invalidateQueries({ queryKey: seerrKeys.all });
       setMessage({ ok: true, text: success(next) });
     } catch (err) {
       setMessage({ ok: false, text: err instanceof ApiError ? err.message : "Couldn't save. Try again." });
@@ -118,6 +123,7 @@ export function SeerrSection() {
             </Button>
           )}
         </div>
+        {config.configured && config.url && <SeerrAccounts connectedUrl={config.url} />}
         {message && (
           <p role={message.ok ? "status" : "alert"} className={cn("text-sm", message.ok ? "text-text-secondary" : "text-danger")}>
             {message.text}

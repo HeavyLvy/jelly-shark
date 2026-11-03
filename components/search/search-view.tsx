@@ -8,11 +8,13 @@ import { LandscapeCard, LandscapeCardSkeleton, PosterCard, PosterCardSkeleton } 
 import { MediaRow, RowItem } from "@/components/media/media-row";
 import { MusicAlbumCard, MusicArtistCard } from "@/components/music/music-cards";
 import { TrackTable } from "@/components/music/track-table";
+import { SeerrRow } from "@/components/seerr/seerr-results";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { dotJoin } from "@/lib/format";
 import { isTitleMatch, pickTopResult, useBrowseGenres, useFavoriteItems, usePeopleSearch, useSearchGroup, useWarmSearchIndex } from "@/lib/queries/search";
 import { useMe } from "@/lib/queries/auth";
+import { useSeerrEnabled, useSeerrSearch } from "@/lib/queries/seerr";
 import { rankEntries, toEntry } from "@/lib/search-fuzzy";
 import { matchPages } from "@/lib/search-pages";
 import { useArtistAlbums, useArtistTopTracks } from "@/lib/queries/music";
@@ -169,6 +171,10 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
   const albums = useSearchGroup("albums", term, big ? 20 : 8, music);
   const playlists = useSearchGroup("playlists", term, 12, filter === "music");
   const people = usePeopleSearch(term, 12, filter === "all" || filter === "movies" || filter === "tv");
+  // Titles Seerr can request (hidden when everything of them is already in the library).
+  const seerrOn = useSeerrEnabled() && video;
+  const seerr = useSeerrSearch(term, seerrOn);
+  const seerrItems = (seerr.data ?? []).filter((i) => i.status !== "available" && (filter === "all" || (filter === "movies" ? i.mediaType === "movie" : i.mediaType === "tv")));
   const me = useMe();
   const isAdmin = !!me.data?.user.isAdministrator && (me.data?.server.isInstanceServer ?? true);
   const pages = useMemo(() => (filter === "all" ? matchPages(term, isAdmin) : []), [filter, term, isAdmin]);
@@ -196,7 +202,7 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
           ? [series, episodes, people]
           : [songs, artists, albums, playlists];
   const loading = enabledGroups.some((g) => g.isPending);
-  const allEmpty = !loading && pages.length === 0 && enabledGroups.every((g) => (g.data?.length ?? 0) === 0) && songList.length + albumList.length === 0;
+  const allEmpty = !loading && !(seerrOn && seerr.isPending) && seerrItems.length === 0 && pages.length === 0 && enabledGroups.every((g) => (g.data?.length ?? 0) === 0) && songList.length + albumList.length === 0;
   const allFailed = enabledGroups.length > 0 && enabledGroups.every((g) => g.isError);
 
   if (allFailed) return <ErrorState title="Search failed" description="Couldn't reach the server. Try again." className={PAD} />;
@@ -289,6 +295,9 @@ function Results({ term, filter }: { term: string; filter: Filter }) {
               ))}
         </MediaRow>
       )}
+
+      {/* Requestable through Seerr */}
+      <SeerrRow items={seerrItems} />
 
       {/* People */}
       {video && (people.data?.length ?? 0) > 0 && (

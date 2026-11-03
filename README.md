@@ -168,6 +168,11 @@ HTTPS pages (or `localhost`). Over plain HTTP they can only add a shortcut. iPho
   with one tap; on iPhone the button shows the steps (Share → *Add to Home Screen*), because Safari has no install
   prompt. If you added it to your home screen before, remove that icon and add it again to get the new icon and name.
   It still needs a connection to your server: it is not an offline app.
+- **Request things that aren't in the library:** when an administrator has connected [Seerr](https://docs.seerr.dev),
+  searching also shows a *Not in your library* row. Open a title to request it (for a show, pick the seasons; ones
+  already requested or in the library can't be picked). You request as your own Seerr account, so Seerr's permissions,
+  quotas and approvals apply. Titles that are fully in your library are left out, and the row doesn't appear at all
+  when Seerr isn't connected.
 - **Keyboard shortcuts:** *Shortcuts & gestures* in the account menu lists them. Space plays or pauses, and the arrow
   keys seek and change volume.
 - **Settings** (playback quality, languages, subtitle style, poster size, which rows Home shows) are saved per user on
@@ -182,8 +187,10 @@ Jellyfin administrators get extra sections in Settings:
   - **Users can choose:** the sign-in screen gets *Change server*, and each profile remembers the server it signed in to.
 - **Seerr:** connect a [Seerr](https://docs.seerr.dev) server (the request manager that works with Jellyfin) by giving its
   address and its API key (Seerr → Settings → General). Both are checked before saving, and the key stays on the
-  Jelly Shark server: it is never sent to a browser. *Disconnect* forgets them. For now this only saves the connection;
-  requesting from Jelly Shark comes in a later update.
+  Jelly Shark server: it is never sent to a browser. *Disconnect* forgets them. Under **Accounts**, each Jellyfin user is
+  matched to the Seerr account with the same Jellyfin id, and Seerr creates one from Jellyfin the first time they
+  request something. If you'd rather someone act as a different Seerr account, pick it there; *Automatic* goes back.
+  Requests don't include 4K or quality profiles yet: Seerr's own defaults apply.
 - **Branding:** change the app's name, icon (built-in presets, or upload your own and crop it) and accent color for
   everyone, including the sign-in page. *Reset to defaults* restores the original look.
 
