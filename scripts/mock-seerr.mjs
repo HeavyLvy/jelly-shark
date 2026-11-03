@@ -208,14 +208,16 @@ const server = createServer((req, res) => {
   const discoverRoute = path.match(/^\/api\/v1\/discover\/(trending|movies|tv|movies\/upcoming|tv\/upcoming)$/);
   if (discoverRoute) {
     const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== "mediaType"));
-    const page = (results) => json(res, { page: 1, totalPages: 1, totalResults: results.length, results });
+    const n = Number(u.searchParams.get("page") ?? 1);
+    const page = (results, totalPages = 1) => json(res, { page: n, totalPages, totalResults: results.length, results: n > totalPages ? [] : results });
     switch (discoverRoute[1]) {
       // Trending mixes movies, shows and people, and says what each is.
       case "trending":
         return page([movieOut(movies[0]), tvOut(shows[0]), { id: 5, mediaType: "person", name: "A. Person" }, movieOut(movies[1])]);
       // The other rows leave `mediaType` out, as Seerr does.
       case "movies":
-        return page(movies.slice(0, 2).map((m) => strip(movieOut(m))));
+        // Two pages, and the second repeats a title from the first, as TMDB's lists shift.
+        return page((n === 1 ? movies.slice(0, 2) : [movies[0], movies[2]]).map((m) => strip(movieOut(m))), 2);
       case "tv":
         return page(shows.map((t) => strip(tvOut(t))));
       case "movies/upcoming":

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
-import type { SeerrCredits, SeerrDiscoverKind, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPersonDetail, SeerrRequestBody, SeerrRequestResult, SeerrRequestRow, SeerrSearchResult } from "@/lib/seerr/types";
-import { useJfQuery } from "./use-jf-query";
+import type { SeerrCredits, SeerrDiscoverKind, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPage, SeerrPersonDetail, SeerrRequestBody, SeerrRequestResult, SeerrRequestRow, SeerrSearchResult } from "@/lib/seerr/types";
+import { hydrationSafe, useJfQuery } from "./use-jf-query";
+import { useIsClient } from "@/lib/use-is-client";
 
 export const seerrKeys = {
   all: ["seerr"] as const,
@@ -89,6 +90,20 @@ export function useSeerrDiscover(kind: SeerrDiscoverKind) {
     queryFn: async ({ signal }) => (await apiFetch<SeerrSearchResult>(`/api/seerr/discover/${kind}`, { signal })).results,
     staleTime: 10 * 60_000,
   });
+}
+
+/** Every page of one Discover row, loaded as you ask for more. */
+export function useSeerrDiscoverPages(kind: SeerrDiscoverKind) {
+  const isClient = useIsClient();
+  const q = useInfiniteQuery({
+    queryKey: [...seerrKeys.discover(kind), "pages"],
+    initialPageParam: 1,
+    queryFn: ({ signal, pageParam }) => apiFetch<SeerrPage>(`/api/seerr/discover/${kind}?page=${pageParam}`, { signal }),
+    getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
+    enabled: isClient,
+    staleTime: 10 * 60_000,
+  });
+  return hydrationSafe(q, isClient);
 }
 
 /** The signed-in person's own requests, newest first. */

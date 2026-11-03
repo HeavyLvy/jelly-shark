@@ -570,3 +570,44 @@ test.describe("Cancelling a request", () => {
     await anon.dispose();
   });
 });
+
+test.describe("See all", () => {
+  test("each Discover row links to its full list", async ({ page }) => {
+    await page.goto("/discover");
+    await page.getByRole("region", { name: "Popular Movies" }).getByRole("link", { name: "See all" }).click();
+    await expect(page).toHaveURL(/\/discover\/movies$/);
+    await expect(page.getByRole("heading", { name: "Popular Movies", level: 1 })).toBeVisible();
+  });
+
+  test("shows a whole list a page at a time, without repeats", async ({ page }) => {
+    await page.goto("/discover/movies");
+    const grid = page.getByRole("list", { name: "Popular Movies" });
+    await expect(grid.getByRole("listitem")).toHaveCount(2);
+    await expect(grid.getByRole("link", { name: /Tide Table/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "Load more" }).click();
+    // Page two repeats Lantern Harbor and adds Tide Table.
+    await expect(grid.getByRole("link", { name: /Tide Table/ })).toBeVisible();
+    await expect(grid.getByRole("listitem")).toHaveCount(3);
+    await expect(page.getByRole("button", { name: "Load more" })).toHaveCount(0);
+    await expect(page.getByText("That's everything.")).toBeVisible();
+    await grid.getByRole("link", { name: /Tide Table/ }).click();
+    await expect(page).toHaveURL(/\/request\/movie\/9003$/);
+  });
+
+  test("a list with a single page has nothing more to load", async ({ page }) => {
+    await page.goto("/discover/upcoming-movies");
+    await expect(page.getByRole("link", { name: /Tide Table/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Load more" })).toHaveCount(0);
+  });
+
+  test("an unknown list says so, and the server checks the page number", async ({ page }) => {
+    await page.goto("/discover/nope");
+    await expect(page.getByRole("heading", { name: "Nothing here" })).toBeVisible();
+    expect((await page.request.get("/api/seerr/discover/movies?page=2")).status()).toBe(200);
+    for (const bad of ["0", "-1", "501", "x", "1.5", "99999"]) {
+      expect((await page.request.get(`/api/seerr/discover/movies?page=${bad}`)).status(), bad).toBe(400);
+    }
+    const body = await (await page.request.get("/api/seerr/discover/movies?page=2")).json();
+    expect(body).toMatchObject({ page: 2, totalPages: 2 });
+  });
+});
