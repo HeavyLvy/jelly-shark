@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Clapperboard, Clock, Download, Plus, Tv } from "lucide-react";
 import { DetailSkeleton, GUTTER, HeroFrame } from "@/components/detail/detail-hero";
 import { InfoPanel, type InfoRow } from "@/components/detail/info-panel";
@@ -20,7 +21,15 @@ import { SeerrCastRow, SeerrRelatedRow } from "./seerr-rows";
 
 /** /request/movie/<id> and /request/tv/<id>: a title that may not be in the library yet, laid out like one that is. */
 export function SeerrTitleView({ type, id }: { type: SeerrMediaType; id: number }) {
+  const router = useRouter();
   const detail = useSeerrDetail(type, id);
+  // A title that is fully in the library has a richer page of its own (logo, versions, watch state), so go there.
+  // A show that is only partly in the library stays here, since this page is where its other seasons are requested.
+  const libraryId = detail.data?.item.status === "available" ? detail.data.jellyfinId : null;
+  useEffect(() => {
+    if (libraryId) router.replace(type === "tv" ? `/show/${libraryId}` : `/item/${libraryId}`);
+  }, [libraryId, type, router]);
+  if (libraryId) return <DetailSkeleton variant={type === "tv" ? "show" : "movie"} />;
   if (detail.isError) return <TitleProblem error={detail.error} onRetry={() => void detail.refetch()} />;
   if (!detail.data) return <DetailSkeleton variant={type === "tv" ? "show" : "movie"} />;
   return (

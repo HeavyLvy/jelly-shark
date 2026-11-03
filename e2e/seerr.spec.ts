@@ -118,9 +118,9 @@ test.describe("a title's page", () => {
     await expect(page.getByRole("link", { name: "Tide Table, Movie, 2017" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Paper Comet/ })).toHaveCount(1);
     // Titles can be followed from one page to the next.
-    await page.getByRole("link", { name: /Paper Comet/ }).first().click();
-    await expect(page).toHaveURL(/\/request\/movie\/9002$/);
-    await expect(page.getByRole("heading", { level: 1, name: "Paper Comet" })).toBeVisible();
+    await page.getByRole("link", { name: /Tide Table/ }).first().click();
+    await expect(page).toHaveURL(/\/request\/movie\/9003$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Tide Table" })).toBeVisible();
   });
 
   test("a movie is requested from its page, as the signed-in person", async ({ page, request }) => {
@@ -143,10 +143,21 @@ test.describe("a title's page", () => {
     await expect(page.getByRole("link", { name: "Lantern Harbor, Movie, 2019, Approved" })).toBeVisible();
   });
 
-  test("a title that's in the library plays from here instead of being requested", async ({ page }) => {
+  test("a title that's in the library opens its library page instead", async ({ page }) => {
     await page.goto("/request/movie/9002");
+    // Paper Comet is Low Orbit in the library, and its own page replaces this one.
+    await expect(page).toHaveURL(/\/item\/m001$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Low Orbit" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Play" })).toHaveAttribute("href", "/watch/m001");
-    await expect(page.getByRole("button", { name: "Request", exact: true })).toHaveCount(0);
+  });
+
+  test("a card for a title in the library goes straight to its library page", async ({ page }) => {
+    await page.goto("/discover");
+    await page.getByRole("region", { name: "Popular Movies" }).getByRole("link", { name: /Paper Comet/ }).click();
+    await expect(page).toHaveURL(/\/item\/m001$/);
+    // Back goes to where you were, not into a redirect loop.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/discover$/);
   });
 
   test("a person has a page of their own with their titles", async ({ page }) => {
