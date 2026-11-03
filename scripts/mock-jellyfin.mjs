@@ -548,6 +548,8 @@ function handle(req, res) {
   if (path === "/" && method === "GET") return jsonOut({ ServerName: SERVER_NAME, mock: true });
   if (path === "/System/Info/Public") return jsonOut({ Id: SERVER_ID, ServerName: SERVER_NAME, Version: "10.11.5" });
   if (path === "/System/Info") return jsonOut({ Id: SERVER_ID, ServerName: SERVER_NAME, Version: "10.11.5" });
+  // Seerr signs in, makes itself an API key and reads it back from the key list.
+  if (path === "/Auth/Keys") return jsonOut({ Items: [{ AccessToken: "mock-seerr-api-key", AppName: "Seerr", DateCreated: "2026-01-01T00:00:00.0000000Z" }], TotalRecordCount: 1, StartIndex: 0 });
   if (path === "/Branding/Configuration") return jsonOut({});
   if (path === "/Users/Public") return jsonOut([]);
   if (path === "/QuickConnect/Enabled") return jsonOut(false);
@@ -579,6 +581,13 @@ function handle(req, res) {
     return { status: 200, headers: { "content-type": img["content-type"], "cache-control": "private, max-age=1800" }, body: img.body };
   }
 
+  // The user list (Seerr imports people from it): the signed-in demo user plus a second, non-admin one.
+  if (path === "/Users") {
+    return jsonOut([
+      { ...USER, Policy: { IsAdministrator: true, EnableUserAdministration: true } },
+      { Id: "b2c3d4e5f6a748499b0c1d2e3f4a5b6c", Name: "guest", ServerId: SERVER_ID, Policy: { IsAdministrator: false } },
+    ]);
+  }
   const userRest = seg[0] === "Users" ? seg.slice(2).join("/") : null;
   if (seg[0] === "Users") {
     if (!userRest) return jsonOut({ ...USER, Policy: { IsAdministrator: true, EnableUserAdministration: true } });

@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "node scripts/start.mjs",
     "mock:jellyfin": "node scripts/mock-jellyfin.mjs",
+    "mock:seerr": "node scripts/mock-seerr.mjs",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",

@@ -5,11 +5,12 @@ import { defineConfig } from "@playwright/test";
 
 /**
  * Browser tests: the real app (production build, so run `npm run build` first)
- * against the fake Jellyfin in scripts/mock-jellyfin.mjs, on ports of their own.
+ * against the fake Jellyfin in scripts/mock-jellyfin.mjs (and a fake Seerr, scripts/mock-seerr.mjs), on ports of their own.
  * Two projects run the same app at a desktop and a phone size; see e2e/.
  */
 const APP_PORT = 3210;
 const MOCK_PORT = 8921;
+const SEERR_PORT = 5057;
 const APP_URL = `http://127.0.0.1:${APP_PORT}`;
 const DB = join(tmpdir(), "jelly-shark-e2e.db");
 // The player tests play a real clip, which browsers only start on their own with these set.
@@ -55,6 +56,12 @@ export default defineConfig({
       command: "node scripts/mock-jellyfin.mjs",
       url: `http://127.0.0.1:${MOCK_PORT}/System/Info/Public`,
       env: { MOCK_PORT: String(MOCK_PORT) },
+      reuseExistingServer: false,
+    },
+    {
+      command: "node scripts/mock-seerr.mjs",
+      url: `http://127.0.0.1:${SEERR_PORT}/api/v1/status`,
+      env: { MOCK_SEERR_PORT: String(SEERR_PORT) },
       reuseExistingServer: false,
     },
     {
