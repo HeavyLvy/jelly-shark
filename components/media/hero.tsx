@@ -13,18 +13,28 @@ import { useAddToPlaylist, useCreatePlaylist, usePlaylists } from "@/lib/queries
 import { JfImage } from "./jf-image";
 
 /**
- * Full-bleed backdrop with the design's left-to-right scrim plus a bottom
- * fade into the page background, so text stays readable over any art.
+ * The scrims every hero backdrop gets: the design's left-to-right fade plus a
+ * bottom fade into the page background, so text stays readable over any art.
+ * `children` is the picture itself (and anything laid over it).
  */
-export function HeroBackdrop({ item, preload, children, className }: { item: BaseItemDto; preload?: boolean; children?: ReactNode; className?: string }) {
+export function HeroBackdropFrame({ children, overlay, className }: { children: ReactNode; overlay?: ReactNode; className?: string }) {
   return (
     <div className={cn("absolute inset-0 overflow-hidden", className)} aria-hidden="true">
-      <JfImage image={pickImage(item, "backdrop")} alt="" sizes="100vw" quality={80} preload={preload} className="absolute inset-0" imgClassName="object-[70%_20%]" />
+      {children}
       <div className="absolute inset-0 bg-linear-to-r from-bg via-bg/75 to-bg/0 md:via-bg/55" />
       <div className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-bg via-bg/60 to-bg/0" />
       <div className="absolute inset-x-0 top-0 h-32 bg-linear-to-b from-bg/70 to-bg/0" />
-      {children}
+      {overlay}
     </div>
+  );
+}
+
+/** A Jellyfin item's backdrop in the hero frame. */
+export function HeroBackdrop({ item, preload, children, className }: { item: BaseItemDto; preload?: boolean; children?: ReactNode; className?: string }) {
+  return (
+    <HeroBackdropFrame className={className} overlay={children}>
+      <JfImage image={pickImage(item, "backdrop")} alt="" sizes="100vw" quality={80} preload={preload} className="absolute inset-0" imgClassName="object-[70%_20%]" />
+    </HeroBackdropFrame>
   );
 }
 

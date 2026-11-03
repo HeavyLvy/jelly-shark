@@ -4,7 +4,7 @@ import { rateLimited } from "@/lib/rate-limit";
 import { SEERR_PROXY_PREFIX } from "@/lib/constants";
 import { seerrCall, seerrMessage } from "@/lib/seerr/client";
 import { requireSeerrUser, requireSignedIn } from "@/lib/seerr/context";
-import { normalizeDetail, normalizeItem } from "@/lib/seerr/normalize";
+import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizePerson } from "@/lib/seerr/normalize";
 import type { SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/types";
 
 /**
@@ -14,13 +14,16 @@ import type { SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/ty
  *
  *   GET  /api/seerr/status               is Seerr set up?
  *   GET  /api/seerr/search?query=        titles to request
- *   GET  /api/seerr/movie/<id>, /tv/<id> one title, and a show's seasons
+ *   GET  /api/seerr/movie/<id>, /tv/<id> one title: cast, facts, a show's seasons
+ *   GET  /api/seerr/<movie|tv>/<id>/recommendations | similar
+ *   GET  /api/seerr/tv/<id>/season/<n>   a season's episodes
+ *   GET  /api/seerr/person/<id>[/credits] a person and the titles they're in
  *   POST /api/seerr/request              ask for a movie, or seasons of a show
  *   GET  /api/seerr/image/<size>/<file>  a poster, fetched through Seerr
  */
 
 const noStore = { "Cache-Control": "no-store" };
-const IMAGE_SIZES = new Set(["w185", "w342", "w500", "w780"]);
+const IMAGE_SIZES = new Set(["w185", "w300", "w342", "w500", "w780", "w1280"]);
 const MAX_TERM = 120;
 
 function parseId(raw: string): number | null {
@@ -45,15 +48,38 @@ async function search(req: NextRequest): Promise<Response> {
 
 async function detail(type: SeerrMediaType, rawId: string): Promise<Response> {
   const id = parseId(rawId);
+  return id === null ? jsonError(400, "bad_id") : lookup(`/${type}/${id}`, (d) => normalizeDetail(d, type));
+}
+
+async function related(type: SeerrMediaType, rawId: string, kind: string): Promise<Response> {
+  const id = parseId(rawId);
+  if (id === null || (kind !== "recommendations" && kind !== "similar")) return jsonError(400, "bad_id");
+  return lookup(`/${type}/${id}/${kind}?page=1`, (d) => ({ results: normalizeList(d, type).slice(0, 24) }));
+}
+
+async function season(rawId: string, rawNumber: string): Promise<Response> {
+  const id = parseId(rawId);
+  const n = /^\d{1,3}$/.test(rawNumber) ? Number(rawNumber) : null;
+  if (id === null || n === null || n < 1) return jsonError(400, "bad_id");
+  return lookup(`/tv/${id}/season/${n}`, (d) => ({ episodes: normalizeEpisodes(d) }));
+}
+
+async function person(rawId: string, credits: boolean): Promise<Response> {
+  const id = parseId(rawId);
   if (id === null) return jsonError(400, "bad_id");
+  return credits ? lookup(`/person/${id}/combined_credits`, (d) => normalizeCredits(d)) : lookup(`/person/${id}`, (d) => normalizePerson(d));
+}
+
+/** Asks Seerr as the signed-in person and sends `shape(data)` back; `null` from `shape` means Seerr sent something unusable. */
+async function lookup<T>(path: string, shape: (data: unknown) => T | null): Promise<Response> {
   const ctx = await requireSeerrUser();
   if (ctx instanceof Response) return ctx;
   try {
-    const { status, data } = await seerrCall(ctx.config, `/${type}/${id}`, { asUser: ctx.seerrUserId });
+    const { status, data } = await seerrCall(ctx.config, path, { asUser: ctx.seerrUserId });
     if (status === 404) return jsonError(404, "not_found");
     if (status !== 200) return jsonError(502, "seerr_error", { message: seerrMessage(data) ?? undefined });
-    const out = normalizeDetail(data, type);
-    return out ? NextResponse.json(out, { headers: noStore }) : jsonError(502, "seerr_error");
+    const out = shape(data);
+    return out === null ? jsonError(502, "seerr_error") : NextResponse.json(out, { headers: noStore });
   } catch {
     return jsonError(502, "upstream_unreachable");
   }
@@ -118,13 +144,18 @@ async function image(size: string, file: string): Promise<Response> {
 
 export async function GET(req: NextRequest) {
   const parts = req.nextUrl.pathname.slice(SEERR_PROXY_PREFIX.length).split("/").filter(Boolean);
-  const [first, second, third] = parts;
+  const [first, second, third, fourth] = parts;
+  const isTitle = first === "movie" || first === "tv";
   if (parts.length === 1 && first === "status") {
     const base = await requireSignedIn();
     return base instanceof Response ? (base.status === 404 ? NextResponse.json({ enabled: false }, { headers: noStore }) : base) : NextResponse.json({ enabled: true }, { headers: noStore });
   }
   if (parts.length === 1 && first === "search") return search(req);
-  if (parts.length === 2 && (first === "movie" || first === "tv")) return detail(first, second);
+  if (parts.length === 2 && isTitle) return detail(first, second);
+  if (parts.length === 3 && isTitle) return related(first, second, third);
+  if (parts.length === 4 && first === "tv" && third === "season") return season(second, fourth);
+  if (parts.length === 2 && first === "person") return person(second, false);
+  if (parts.length === 3 && first === "person" && third === "credits") return person(second, true);
   if (parts.length === 3 && first === "image") return image(second, third);
   return jsonError(404, "not_found");
 }

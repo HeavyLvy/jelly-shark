@@ -23,10 +23,79 @@ export interface SeerrSeason {
   status: SeerrStatus;
 }
 
+export interface SeerrPerson {
+  id: number;
+  name: string;
+  /** The character they play, or their job on the crew. */
+  role: string | null;
+  profilePath: string | null;
+}
+
+/** A movie or show with everything its page shows. */
 export interface SeerrDetail {
   item: SeerrItem;
+  tagline: string | null;
+  backdropPath: string | null;
+  /** Movie length in minutes (shows don't have one worth showing). */
+  runtime: number | null;
+  genres: string[];
+  /** Out of 10. */
+  rating: number | null;
+  /** Age rating such as `PG-13` or `TV-MA` (US). */
+  certification: string | null;
+  /** Full date, `YYYY-MM-DD`: release (movie) or first air date (show). */
+  date: string | null;
+  /** Shows: when the latest episode aired, `YYYY-MM-DD`. */
+  lastDate: string | null;
+  /** Released, Ended, Returning Series, … as TMDB says. */
+  statusText: string | null;
+  originalLanguage: string | null;
+  studios: string[];
+  networks: string[];
+  budget: number | null;
+  revenue: number | null;
+  creators: string[];
+  directors: string[];
+  writers: string[];
+  cast: SeerrPerson[];
+  /** A YouTube trailer, opened in a new tab. */
+  trailerUrl: string | null;
+  homepage: string | null;
+  numberOfSeasons: number | null;
+  numberOfEpisodes: number | null;
+  nextEpisode: { season: number; episode: number; airDate: string } | null;
+  /** The Jellyfin item this title is in your library as, when Seerr knows it. */
+  jellyfinId: string | null;
   /** TV only: the seasons (not Specials) and which can still be requested. */
   seasons: SeerrSeason[];
+}
+
+export interface SeerrEpisode {
+  number: number;
+  name: string;
+  overview: string;
+  airDate: string | null;
+  /** Minutes. */
+  runtime: number | null;
+  stillPath: string | null;
+}
+
+export interface SeerrPersonDetail {
+  id: number;
+  name: string;
+  biography: string;
+  birthday: string | null;
+  deathday: string | null;
+  placeOfBirth: string | null;
+  profilePath: string | null;
+  department: string | null;
+}
+
+export interface SeerrCredits {
+  /** Acting credits, best known first. */
+  cast: SeerrItem[];
+  /** Everything else (directing, writing…), most recent first. */
+  crew: SeerrItem[];
 }
 
 export interface SeerrSearchResult {

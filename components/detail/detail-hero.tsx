@@ -38,9 +38,8 @@ interface DetailHeroProps {
   item: BaseItemDto;
   /** Item whose backdrop to show when `item` has none (e.g. a collection's child). */
   backdropItem?: BaseItemDto;
-  /** Extra meta entries after the years (runtime, seasons, "Ends at"…). */
   /** Facts after the year. `{ node, hideOnPhone }` drops one on phones (e.g. "Ends at"). */
-  meta: (ReactNode | { node: ReactNode; hideOnPhone: true })[];
+  meta: HeroMeta;
   /** The Play button. Full width on phones. */
   primary: ReactNode;
   /** Circle/square extras (trailer, watched, playlist, favorite…). A row of circles under Play on phones. */
@@ -48,26 +47,80 @@ interface DetailHeroProps {
   panel: ReactNode;
 }
 
+export type HeroMeta = (ReactNode | { node: ReactNode; hideOnPhone: true })[];
+
 /**
- * Detail hero: full-bleed backdrop, back link, huge title, meta row,
- * overview and actions on the left; floating info card on the right.
+ * Detail hero for something in the library: full-bleed backdrop, back link,
+ * huge title, meta row, overview and actions on the left; floating info card
+ * on the right. The layout itself is HeroFrame, shared with titles that
+ * aren't in the library yet.
  */
 export function DetailHero({ item, backdropItem, meta, primary, secondary, panel }: DetailHeroProps) {
-  const back = backLinkFor(item);
-  const years = formatYears(item);
-  const rating = formatRating(item.CommunityRating);
-  const tagline = item.Taglines?.[0];
   const art = backdropItem ?? item;
-  const hasBackdrop = pickImage(art, "backdrop") !== null;
+  return (
+    <HeroFrame
+      backdrop={
+        <HeroBackdrop item={art} preload className="-z-10">
+          {/* Phones: text spans the full width, so dim the whole backdrop. */}
+          <div className="absolute inset-0 bg-bg/55 md:hidden" />
+        </HeroBackdrop>
+      }
+      hasBackdrop={pickImage(art, "backdrop") !== null}
+      back={backLinkFor(item)}
+      title={
+        // Logo box overrides target the logo span (not the sr-only name): the
+        // mockup's title is the hero's dominant element, ~260px tall at 1440.
+        <TitleTreatment
+          item={item}
+          className="lg:text-8xl xl:text-[7.25rem] [&>span[aria-hidden]]:h-28 [&>span[aria-hidden]]:max-w-[34rem] sm:[&>span[aria-hidden]]:h-40 lg:[&>span[aria-hidden]]:h-52"
+        />
+      }
+      certification={item.OfficialRating}
+      years={formatYears(item)}
+      meta={meta}
+      rating={formatRating(item.CommunityRating)}
+      tagline={item.Taglines?.[0]}
+      overview={item.Overview}
+      primary={primary}
+      secondary={secondary}
+      panel={panel}
+    />
+  );
+}
+
+interface HeroFrameProps {
+  /** The backdrop picture, already in a HeroBackdropFrame with `-z-10`. */
+  backdrop: ReactNode;
+  hasBackdrop: boolean;
+  /** Where the back link goes and what it's called. */
+  back: { href: string; label: string };
+  /** Phones: go back in history instead of to `back.href` (for pages you can reach from anywhere). */
+  historyBack?: boolean;
+  /** The title: art or text, an `h1`. */
+  title: ReactNode;
+  certification?: string | null;
+  years?: string | null;
+  meta: HeroMeta;
+  rating?: string | null;
+  tagline?: string | null;
+  overview?: string | null;
+  primary: ReactNode;
+  secondary: ReactNode;
+  panel: ReactNode;
+}
+
+/**
+ * The hero layout, with no idea what it's showing: back link, title, facts,
+ * overview and actions on the left, info card on the right. Library titles
+ * (DetailHero) and Seerr titles both use it, so they look and behave the same.
+ */
+export function HeroFrame({ backdrop, hasBackdrop, back, historyBack, title, certification, years, meta, rating, tagline, overview, primary, secondary, panel }: HeroFrameProps) {
   return (
     <section className="relative isolate overflow-hidden" aria-label="Overview">
-      <HeroBackdrop item={art} preload className="-z-10">
-        {/* Phones: text spans the full width, so dim the whole backdrop. */}
-        <div className="absolute inset-0 bg-bg/55 md:hidden" />
-      </HeroBackdrop>
+      {backdrop}
       <div className={`relative flex flex-col gap-8 pt-28 pb-10 ${hasBackdrop ? "min-h-[560px] lg:min-h-[640px]" : "lg:pt-36"} lg:flex-row lg:items-end lg:justify-between lg:gap-12 ${GUTTER}`}>
         <div className="flex max-w-2xl min-w-0 flex-1 flex-col justify-end lg:self-stretch">
-          <MobileBackButton href={back.href} label={`Back to ${back.label}`} />
+          <MobileBackButton href={historyBack ? undefined : back.href} label={`Back to ${back.label}`} />
           <Link
             href={back.href}
             className="mb-5 inline-flex w-fit items-center gap-1 rounded-full text-sm text-text-secondary transition hover:text-text max-sm:hidden"
@@ -75,16 +128,11 @@ export function DetailHero({ item, backdropItem, meta, primary, secondary, panel
             <ChevronLeft className="size-4" aria-hidden="true" />
             {back.label}
           </Link>
-          {/* Logo box overrides target the logo span (not the sr-only name): the
-              mockup's title is the hero's dominant element, ~260px tall at 1440. */}
-          <TitleTreatment
-            item={item}
-            className="lg:text-8xl xl:text-[7.25rem] [&>span[aria-hidden]]:h-28 [&>span[aria-hidden]]:max-w-[34rem] sm:[&>span[aria-hidden]]:h-40 lg:[&>span[aria-hidden]]:h-52"
-          />
+          {title}
           <ul className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-text-secondary" aria-label="Title facts">
-            {item.OfficialRating && (
+            {certification && (
               <li>
-                <RatingBadge rating={item.OfficialRating} />
+                <RatingBadge rating={certification} />
               </li>
             )}
             {years && <li>{years}</li>}
@@ -99,8 +147,8 @@ export function DetailHero({ item, backdropItem, meta, primary, secondary, panel
               </li>
             )}
           </ul>
-          {tagline && !item.Overview && <p className="mt-4 text-base text-text-secondary italic">{tagline}</p>}
-          {item.Overview && <Synopsis text={item.Overview} />}
+          {tagline && !overview && <p className="mt-4 text-base text-text-secondary italic">{tagline}</p>}
+          {overview && <Synopsis text={overview} />}
           <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <div className="flex items-center gap-3 max-sm:[&>*]:w-full">{primary}</div>
             <div className="flex flex-wrap items-center gap-2.5 max-sm:justify-evenly sm:gap-3">{secondary}</div>
