@@ -6,19 +6,11 @@ import { buttonClasses } from "@/components/ui/button";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
 import { useSeerrDiscover } from "@/lib/queries/seerr";
-import type { SeerrDiscoverKind } from "@/lib/seerr/types";
+import { DISCOVER_ROWS } from "@/lib/seerr/discover";
 import { useIsClient } from "@/lib/use-is-client";
 import { SeerrPosterCard } from "./seerr-cards";
 
 const GUTTER = "px-4 sm:px-8 lg:px-11";
-
-const ROWS: { kind: SeerrDiscoverKind; title: string; subtitle: string }[] = [
-  { kind: "trending", title: "Trending", subtitle: "What people are watching this week" },
-  { kind: "movies", title: "Popular Movies", subtitle: "Ask for anything that isn't in your library yet" },
-  { kind: "tv", title: "Popular Shows", subtitle: "Ask for anything that isn't in your library yet" },
-  { kind: "upcoming-movies", title: "Upcoming Movies", subtitle: "Coming soon" },
-  { kind: "upcoming-tv", title: "Upcoming Shows", subtitle: "Coming soon" },
-];
 
 /** Browse what's popular and coming soon, and request it. Every title opens its own page. */
 export function DiscoverView() {
@@ -34,7 +26,7 @@ export function DiscoverView() {
         <p className="mt-2 mb-10 text-sm text-text-secondary">Find movies and shows to request.</p>
       </div>
       <div className="flex flex-col gap-12">
-        {ROWS.map((row) => (
+        {DISCOVER_ROWS.map((row) => (
           <DiscoverRow key={row.kind} {...row} />
         ))}
       </div>
@@ -42,11 +34,11 @@ export function DiscoverView() {
   );
 }
 
-function DiscoverRow({ kind, title, subtitle }: (typeof ROWS)[number]) {
+function DiscoverRow({ kind, title, subtitle }: (typeof DISCOVER_ROWS)[number]) {
   const q = useSeerrDiscover(kind);
   if (q.isError || (q.data && q.data.length === 0)) return null;
   return (
-    <MediaRow title={title} subtitle={subtitle}>
+    <MediaRow title={title} subtitle={subtitle} seeAllHref={`/discover/${kind}`}>
       {q.data
         ? q.data.map((item) => (
             <RowItem key={`${item.mediaType}-${item.id}`}>

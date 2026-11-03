@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests, normalizeSeasons, safePosterPath } from "./normalize";
+import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests, normalizeSeasons, pageOf, safePosterPath } from "./normalize";
 
 describe("mapMediaStatus", () => {
   it.each([
@@ -210,5 +210,14 @@ describe("normalizeMixed", () => {
     const out = normalizeMixed({ results: [{ id: 1, mediaType: "movie", title: "A" }, { id: 2, mediaType: "person", name: "P" }, { id: 3, mediaType: "tv", name: "B" }, null, { id: 4, title: "no type" }] });
     expect(out.map((i) => [i.mediaType, i.id])).toEqual([["movie", 1], ["tv", 3]]);
     expect(normalizeMixed(null)).toEqual([]);
+  });
+});
+
+describe("pageOf", () => {
+  it("reads the page numbers and keeps them sane", () => {
+    expect(pageOf({ page: 2, totalPages: 7 })).toEqual({ page: 2, totalPages: 7 });
+    expect(pageOf({ page: 3, totalPages: 40000 })).toEqual({ page: 3, totalPages: 500 });
+    expect(pageOf({ page: "2", totalPages: -1 })).toEqual({ page: 1, totalPages: 1 });
+    expect(pageOf(null)).toEqual({ page: 1, totalPages: 1 });
   });
 });

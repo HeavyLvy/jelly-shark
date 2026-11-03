@@ -179,7 +179,7 @@ HTTPS pages (or `localhost`). Over plain HTTP they can only add a shortcut. iPho
   connected.
 - **Discover:** with Seerr connected, a *Discover* tab appears in the navigation. It has rows for what's trending,
   popular movies and shows, and what's coming soon. Every title opens its own page, where it can be requested. Titles
-  already in your library are marked *Available*.
+  already in your library are marked *Available*. Each row has *See all*, which opens the whole list a page at a time.
 - **My requests:** *My requests* in the account menu lists what you've asked for, newest first, with where each
   stands (waiting for approval, approved, declined, or available). The menu shows how many are still open. Once a title
   is in the library it has a *Play* or *Open* button. It only ever shows your own requests. A request that is still waiting for approval can be cancelled there, or on the

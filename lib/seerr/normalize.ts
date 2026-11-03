@@ -193,6 +193,12 @@ export function normalizeMixed(raw: unknown): SeerrItem[] {
   return (isObj(raw) ? arr(raw.results) : []).map(normalizeItem).filter((i): i is SeerrItem => i !== null);
 }
 
+/** Which page Seerr sent and how many there are; TMDB stops serving at 500. */
+export function pageOf(raw: unknown): { page: number; totalPages: number } {
+  const n = (v: unknown, fallback: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 ? Math.min(v, 500) : fallback);
+  return isObj(raw) ? { page: n(raw.page, 1), totalPages: n(raw.totalPages, 1) } : { page: 1, totalPages: 1 };
+}
+
 /** One season's episodes. */
 export function normalizeEpisodes(raw: unknown): SeerrEpisode[] {
   const list = isObj(raw) ? arr(raw.episodes) : [];

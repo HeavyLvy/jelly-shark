@@ -4,7 +4,7 @@ import { rateLimited } from "@/lib/rate-limit";
 import { SEERR_PROXY_PREFIX } from "@/lib/constants";
 import { seerrCall, seerrMessage } from "@/lib/seerr/client";
 import { requireSeerrUser, requireSignedIn } from "@/lib/seerr/context";
-import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests } from "@/lib/seerr/normalize";
+import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests, pageOf } from "@/lib/seerr/normalize";
 import type { SeerrDiscoverKind, SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/types";
 
 /**
@@ -18,7 +18,7 @@ import type { SeerrDiscoverKind, SeerrItem, SeerrMediaType, SeerrRequestBody } f
  *   GET  /api/seerr/<movie|tv>/<id>/recommendations | similar
  *   GET  /api/seerr/tv/<id>/season/<n>   a season's episodes
  *   GET  /api/seerr/person/<id>[/credits] a person and the titles they're in
- *   GET  /api/seerr/discover/<row>       trending | movies | tv | upcoming-movies | upcoming-tv
+ *   GET  /api/seerr/discover/<row>       trending | movies | tv | upcoming-movies | upcoming-tv  (?page=n)
  *   GET  /api/seerr/requests             your own requests, newest first
  *   POST /api/seerr/request              ask for a movie, or seasons of a show
  *   DELETE /api/seerr/request/<id>       cancel one of your own requests that is still waiting
@@ -97,10 +97,19 @@ const DISCOVER: Record<SeerrDiscoverKind, { path: string; type: SeerrMediaType |
   "upcoming-tv": { path: "/discover/tv/upcoming", type: "tv" },
 };
 
-async function discover(kind: string): Promise<Response> {
+/** `?page=` as a whole number from 1 to 500 (where TMDB stops), or null. */
+function parsePage(req: NextRequest): number | null {
+  const raw = req.nextUrl.searchParams.get("page");
+  if (raw === null) return 1;
+  return /^\d{1,3}$/.test(raw) && Number(raw) >= 1 && Number(raw) <= 500 ? Number(raw) : null;
+}
+
+async function discover(req: NextRequest, kind: string): Promise<Response> {
   const row = Object.hasOwn(DISCOVER, kind) ? DISCOVER[kind as SeerrDiscoverKind] : null;
+  const page = parsePage(req);
   if (!row) return jsonError(404, "not_found");
-  return lookup(`${row.path}?page=1`, (d) => ({ results: (row.type ? normalizeList(d, row.type) : normalizeMixed(d)).slice(0, 20) }));
+  if (page === null) return jsonError(400, "bad_page");
+  return lookup(`${row.path}?page=${page}`, (d) => ({ results: row.type ? normalizeList(d, row.type) : normalizeMixed(d), ...pageOf(d) }));
 }
 
 /** The signed-in person's own requests. Seerr gives an administrator everyone's unless told whose to list. */
@@ -205,7 +214,7 @@ export async function GET(req: NextRequest) {
   }
   if (parts.length === 1 && first === "search") return search(req);
   if (parts.length === 1 && first === "requests") return myRequests();
-  if (parts.length === 2 && first === "discover") return discover(second);
+  if (parts.length === 2 && first === "discover") return discover(req, second);
   if (parts.length === 2 && isTitle) return detail(first, second);
   if (parts.length === 3 && isTitle) return related(first, second, third);
   if (parts.length === 4 && first === "tv" && third === "season") return season(second, fourth);
