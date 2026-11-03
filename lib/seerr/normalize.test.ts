@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizePerson, normalizeSeasons, safePosterPath } from "./normalize";
+import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizePerson, normalizeRequests, normalizeSeasons, safePosterPath } from "./normalize";
 
 describe("mapMediaStatus", () => {
   it.each([
@@ -173,5 +173,34 @@ describe("normalizePerson and normalizeCredits", () => {
     expect(plenty.cast.map((i) => i.id).sort()).toEqual([3, 4, 5, 6]);
     const few = normalizeCredits({ cast: [role(1, "Herself"), role(2, "Self"), role(3, "Judge")] });
     expect(few.cast).toHaveLength(3);
+  });
+});
+
+describe("normalizeRequests", () => {
+  const req = (over: object, media: object = {}) => ({ id: 1, status: 1, createdAt: "2026-10-01T12:00:00.000Z", seasons: [], media: { tmdbId: 9001, mediaType: "movie", status: 2, ...media }, requestedBy: { email: "x@y.z" }, ...over });
+  const run = (...rows: object[]) => normalizeRequests({ results: rows });
+
+  it("works out where each request stands", () => {
+    expect(run(req({ status: 1 }))[0]?.state).toBe("waiting");
+    expect(run(req({ status: 2 }, { status: 3 }))[0]?.state).toBe("approved");
+    expect(run(req({ status: 3 }))[0]?.state).toBe("declined");
+    // Once the title is in the library it is available, whatever the request says.
+    expect(run(req({ status: 2 }, { status: 5, jellyfinMediaId: "abc123" }))[0]).toMatchObject({ state: "available", jellyfinId: "abc123" });
+    expect(run(req({ status: 3 }, { status: 5 }))[0]?.state).toBe("declined");
+  });
+  it("keeps only what the page needs", () => {
+    expect(run(req({}))[0]).toEqual({ id: 1, mediaType: "movie", tmdbId: 9001, state: "waiting", seasons: [], createdAt: "2026-10-01T12:00:00.000Z", jellyfinId: null });
+  });
+  it("lists a show's seasons in order and leaves out Specials", () => {
+    const row = run(req({ seasons: [{ seasonNumber: 3 }, { seasonNumber: 0 }, { seasonNumber: 1 }] }, { mediaType: "tv", tmdbId: 5 }))[0];
+    expect(row).toMatchObject({ mediaType: "tv", seasons: [1, 3] });
+  });
+  it("only gives a Jellyfin id once available, and only a plain one", () => {
+    expect(run(req({}, { jellyfinMediaId: "abc" }))[0]?.jellyfinId).toBeNull();
+    expect(run(req({}, { status: 5, jellyfinMediaId: "../x" }))[0]?.jellyfinId).toBeNull();
+  });
+  it("skips rows it can't use", () => {
+    expect(run({ id: 2 }, { id: 3, media: { tmdbId: 0, mediaType: "movie" } }, { id: 4, media: { tmdbId: 5, mediaType: "music" } }, null as never)).toEqual([]);
+    expect(normalizeRequests(null)).toEqual([]);
   });
 });

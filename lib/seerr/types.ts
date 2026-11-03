@@ -98,6 +98,24 @@ export interface SeerrCredits {
   crew: SeerrItem[];
 }
 
+/** Where a request stands: waiting for an administrator, approved and on its way, turned down, or in the library. */
+export type SeerrRequestState = "waiting" | "approved" | "declined" | "available";
+
+/** One of the signed-in person's requests. The title's name and poster come from its own detail lookup. */
+export interface SeerrRequestRow {
+  id: number;
+  mediaType: SeerrMediaType;
+  /** The TMDB id, the same one the title's page uses. */
+  tmdbId: number;
+  state: SeerrRequestState;
+  /** Shows only: the seasons asked for. */
+  seasons: number[];
+  /** ISO time the request was made. */
+  createdAt: string | null;
+  /** The Jellyfin item once the title is in the library. */
+  jellyfinId: string | null;
+}
+
 export interface SeerrSearchResult {
   results: SeerrItem[];
 }

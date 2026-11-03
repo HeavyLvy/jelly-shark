@@ -4,7 +4,7 @@ import { rateLimited } from "@/lib/rate-limit";
 import { SEERR_PROXY_PREFIX } from "@/lib/constants";
 import { seerrCall, seerrMessage } from "@/lib/seerr/client";
 import { requireSeerrUser, requireSignedIn } from "@/lib/seerr/context";
-import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizePerson } from "@/lib/seerr/normalize";
+import { normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizePerson, normalizeRequests } from "@/lib/seerr/normalize";
 import type { SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/types";
 
 /**
@@ -18,6 +18,7 @@ import type { SeerrItem, SeerrMediaType, SeerrRequestBody } from "@/lib/seerr/ty
  *   GET  /api/seerr/<movie|tv>/<id>/recommendations | similar
  *   GET  /api/seerr/tv/<id>/season/<n>   a season's episodes
  *   GET  /api/seerr/person/<id>[/credits] a person and the titles they're in
+ *   GET  /api/seerr/requests             your own requests, newest first
  *   POST /api/seerr/request              ask for a movie, or seasons of a show
  *   GET  /api/seerr/image/<size>/<file>  a poster, fetched through Seerr
  */
@@ -83,6 +84,13 @@ async function lookup<T>(path: string, shape: (data: unknown) => T | null): Prom
   } catch {
     return jsonError(502, "upstream_unreachable");
   }
+}
+
+/** The signed-in person's own requests. Seerr gives an administrator everyone's unless told whose to list. */
+async function myRequests(): Promise<Response> {
+  const ctx = await requireSeerrUser();
+  if (ctx instanceof Response) return ctx;
+  return lookup(`/request?take=60&skip=0&sort=added&filter=all&requestedBy=${ctx.seerrUserId}`, (d) => ({ requests: normalizeRequests(d) }));
 }
 
 /** Checks the body of a request: only what the app sends, nothing a person could use to pick quality profiles, 4K or someone else's account. */
@@ -151,6 +159,7 @@ export async function GET(req: NextRequest) {
     return base instanceof Response ? (base.status === 404 ? NextResponse.json({ enabled: false }, { headers: noStore }) : base) : NextResponse.json({ enabled: true }, { headers: noStore });
   }
   if (parts.length === 1 && first === "search") return search(req);
+  if (parts.length === 1 && first === "requests") return myRequests();
   if (parts.length === 2 && isTitle) return detail(first, second);
   if (parts.length === 3 && isTitle) return related(first, second, third);
   if (parts.length === 4 && first === "tv" && third === "season") return season(second, fourth);

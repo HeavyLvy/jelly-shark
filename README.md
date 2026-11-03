@@ -177,6 +177,9 @@ HTTPS pages (or `localhost`). Over plain HTTP they can only add a shortcut. iPho
   *Play* or *Go to show* instead. You request as your own Seerr account, so Seerr's permissions, quotas and approvals
   apply. Titles that are fully in your library are left out of search, and none of this appears when Seerr isn't
   connected.
+- **My requests:** *My requests* in the account menu lists what you've asked for, newest first, with where each
+  stands (waiting for approval, approved, declined, or available). The menu shows how many are still open. Once a title
+  is in the library it has a *Play* or *Open* button. It only ever shows your own requests.
 - **Keyboard shortcuts:** *Shortcuts & gestures* in the account menu lists them. Space plays or pauses, and the arrow
   keys seek and change volume.
 - **Settings** (playback quality, languages, subtitle style, poster size, which rows Home shows) are saved per user on

@@ -158,6 +158,13 @@ const server = createServer((req, res) => {
     res.writeHead(200, { "content-type": "image/png" });
     return res.end(PIXEL);
   }
+  if (path === "/mock/requests" && req.method === "POST") {
+    // Test helper: add a request as it would exist already (any status, any person).
+    return readBody(req, (b) => {
+      requests.push({ id: requests.length + 1, mediaType: b.mediaType, mediaId: b.mediaId, seasons: b.seasons ?? [], status: b.status ?? 1, by: b.by ?? 1, body: b, createdAt: b.createdAt ?? new Date().toISOString() });
+      json(res, requests.at(-1), 201);
+    });
+  }
   if (path === "/mock/requests") {
     if (req.method === "DELETE") {
       requests = [];
@@ -219,6 +226,16 @@ const server = createServer((req, res) => {
     return json(res, { id: person.id, cast: [...asCast, ...asCast.slice(0, 1)], crew: asCrew });
   }
 
+  if (path === "/api/v1/request" && req.method === "GET") {
+    // Like Seerr, an administrator gets everyone's requests unless `requestedBy` says whose.
+    const by = u.searchParams.get("requestedBy");
+    const mine = requests.filter((r) => (by ? r.by === Number(by) : isAdmin(asUser ?? 1) || r.by === asUser));
+    const results = [...mine].reverse().map((r) => {
+      const media = r.mediaType === "movie" ? movies.find((m) => m.id === r.mediaId) : shows.find((t) => t.id === r.mediaId);
+      return { id: r.id, status: r.status, createdAt: r.createdAt, type: r.mediaType, seasons: r.seasons.map((n) => ({ seasonNumber: n })), requestedBy: { id: r.by }, media: { tmdbId: r.mediaId, mediaType: r.mediaType, status: media.status === 5 ? 5 : r.status === 2 ? 3 : 2, jellyfinMediaId: media.status === 5 ? media.jellyfinId : null } };
+    });
+    return json(res, { pageInfo: { pages: 1, pageSize: 60, results: results.length, page: 1 }, results });
+  }
   if (path === "/api/v1/request" && req.method === "POST") {
     return readBody(req, (body) => {
       const who = asUser ?? 1;
@@ -232,7 +249,7 @@ const server = createServer((req, res) => {
         if (!Array.isArray(body.seasons) || body.seasons.length === 0 || body.seasons.every((n) => taken.has(n))) return json(res, { message: "No seasons available to request" }, 202);
       }
       // Seerr approves an administrator's requests straight away; everyone else waits.
-      const request = { id: requests.length + 1, mediaType: body.mediaType, mediaId: body.mediaId, seasons: body.seasons ?? [], status: isAdmin(who) ? 2 : 1, by: who, body };
+      const request = { id: requests.length + 1, mediaType: body.mediaType, mediaId: body.mediaId, seasons: body.seasons ?? [], status: isAdmin(who) ? 2 : 1, by: who, body, createdAt: new Date().toISOString() };
       requests.push(request);
       json(res, { id: request.id, status: request.status, requestedBy: { id: who } }, 201);
     });
