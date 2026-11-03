@@ -17,6 +17,8 @@ export const QUICK_CONNECT_MAX_AGE = 60 * 10;
 export const SERVER_COOKIE_MAX_AGE = 60 * 30;
 
 export const JF_PROXY_PREFIX = "/api/jf";
+/** Our own Seerr API for the browser (see app/api/seerr). */
+export const SEERR_PROXY_PREFIX = "/api/seerr";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
