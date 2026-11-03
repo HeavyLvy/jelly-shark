@@ -38,6 +38,7 @@ export const APP_PAGES: AppPage[] = [
   { id: "devices", label: "Devices", kind: "Setting", keywords: ["sessions", "signed in", "quick connect"], href: "/settings#devices" },
   { id: "home-rows", label: "Home page rows", kind: "Setting", keywords: ["hide rows", "most popular", "customize home"], href: "/settings#home" },
   { id: "server", label: "Jellyfin server address", kind: "Setting", keywords: ["url", "connection", "host"], href: "/settings", adminOnly: true },
+  { id: "seerr", label: "Seerr", kind: "Setting", keywords: ["request", "requests", "overseerr", "jellyseerr", "api key", "connection"], href: "/settings", adminOnly: true },
   { id: "branding", label: "Branding", kind: "Setting", keywords: ["name", "icon", "logo", "accent", "color", "colour", "theme"], href: "/settings", adminOnly: true },
   { id: "shortcuts", label: "Keyboard shortcuts & gestures", kind: "Action", keywords: ["hotkeys", "keys", "help", "controls", "swipe"], action: "shortcuts" },
   { id: "approve", label: "Approve a device", kind: "Action", keywords: ["quick connect", "sign in another device", "code", "tv login"], action: "quick-connect" },

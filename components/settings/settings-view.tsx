@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { QUALITY_OPTIONS, SUBTITLE_SIZES, readVideoPrefs, writeVideoPrefs, type VideoPrefs } from "@/lib/player/video-prefs";
 import { HOME_ROWS, posterWidthFor, setUiPrefs, useUiPrefs, type PosterSize } from "@/lib/ui-prefs";
 import { BrandingSection } from "./branding-section";
+import { SeerrSection } from "./seerr-section";
 import { ServerSection } from "./server-section";
 import { Button } from "@/components/ui/button";
 import { OPEN_QUICK_CONNECT } from "@/components/quick-connect-dialog";
@@ -138,6 +139,7 @@ function SettingsBody() {
       </Section>
 
       <ServerSection />
+      {isAdmin && <SeerrSection />}
 
       <Section title="Install app">
         <Row

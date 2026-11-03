@@ -180,6 +180,10 @@ Jellyfin administrators get extra sections in Settings:
 - **Server:** change the default Jellyfin address (it's checked before saving), and choose who may pick a server:
   - **Locked** (default): everyone uses your server and never sees server options. Good for a family setup.
   - **Users can choose:** the sign-in screen gets *Change server*, and each profile remembers the server it signed in to.
+- **Seerr:** connect a [Seerr](https://docs.seerr.dev) server (the request manager that works with Jellyfin) by giving its
+  address and its API key (Seerr → Settings → General). Both are checked before saving, and the key stays on the
+  Jelly Shark server: it is never sent to a browser. *Disconnect* forgets them. For now this only saves the connection;
+  requesting from Jelly Shark comes in a later update.
 - **Branding:** change the app's name, icon (built-in presets, or upload your own and crop it) and accent color for
   everyone, including the sign-in page. *Reset to defaults* restores the original look.
 
@@ -209,7 +213,8 @@ SQLite through [Drizzle ORM](https://orm.drizzle.team): the schema is in `lib/db
 `npm run db:generate` and commit the new migration in `drizzle/`. Migrations run automatically at startup.
 
 No Jellyfin server handy? `npm run mock:jellyfin` starts a fake one on port 8920 with made-up movies, shows and music.
-Set `JELLYFIN_URL=http://127.0.0.1:8920` and sign in with any username and password.
+Set `JELLYFIN_URL=http://127.0.0.1:8920` and sign in with any username and password. `npm run mock:seerr` starts a fake
+Seerr on port 5056 (address `http://127.0.0.1:5056`, API key `mock-seerr-api-key`).
 
 Before sending a change, run `npx next typegen && npx tsc --noEmit` (the first part generates Next's route types, which a
 fresh clone doesn't have yet), `npm run lint`, `npm run build`, `npm test` (fast unit tests) and `npm run test:e2e` (browser tests at desktop and
