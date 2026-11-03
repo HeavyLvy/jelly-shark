@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests, normalizeSeasons, pageOf, safePosterPath } from "./normalize";
+import { imageFileName, mapMediaStatus, normalizeCredits, normalizeDetail, normalizeEpisodes, normalizeGenres, normalizeItem, normalizeList, normalizeMixed, normalizePerson, normalizeRequests, normalizeSeasons, pageOf, safePosterPath } from "./normalize";
 
 describe("mapMediaStatus", () => {
   it.each([
@@ -219,5 +219,12 @@ describe("pageOf", () => {
     expect(pageOf({ page: 3, totalPages: 40000 })).toEqual({ page: 3, totalPages: 500 });
     expect(pageOf({ page: "2", totalPages: -1 })).toEqual({ page: 1, totalPages: 1 });
     expect(pageOf(null)).toEqual({ page: 1, totalPages: 1 });
+  });
+});
+
+describe("normalizeGenres", () => {
+  it("keeps plain genres and drops anything odd", () => {
+    expect(normalizeGenres([{ id: 18, name: "Drama" }, { id: 0, name: "Zero" }, { id: 5, name: "  " }, { id: "x", name: "Bad" }, null, { id: 35, name: "Comedy", extra: 1 }])).toEqual([{ id: 18, name: "Drama" }, { id: 35, name: "Comedy" }]);
+    expect(normalizeGenres({})).toEqual([]);
   });
 });

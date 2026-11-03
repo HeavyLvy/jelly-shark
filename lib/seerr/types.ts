@@ -119,6 +119,11 @@ export interface SeerrRequestRow {
 /** The rows on the Discover page. */
 export type SeerrDiscoverKind = "trending" | "movies" | "tv" | "upcoming-movies" | "upcoming-tv";
 
+export interface SeerrGenre {
+  id: number;
+  name: string;
+}
+
 /** One page of a long list (Discover's "See all"). */
 export interface SeerrPage {
   results: SeerrItem[];

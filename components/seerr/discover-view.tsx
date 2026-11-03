@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
+import Link from "next/link";
 import { PosterCardSkeleton } from "@/components/media/cards";
 import { MediaRow, RowItem } from "@/components/media/media-row";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
-import { useSeerrDiscover } from "@/lib/queries/seerr";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { useSeerrDiscover, useSeerrGenres } from "@/lib/queries/seerr";
 import { DISCOVER_ROWS } from "@/lib/seerr/discover";
 import { useIsClient } from "@/lib/use-is-client";
 import { SeerrPosterCard } from "./seerr-cards";
@@ -26,11 +29,43 @@ export function DiscoverView() {
         <p className="mt-2 mb-10 text-sm text-text-secondary">Find movies and shows to request.</p>
       </div>
       <div className="flex flex-col gap-12">
+        <GenreBrowser />
         {DISCOVER_ROWS.map((row) => (
           <DiscoverRow key={row.kind} {...row} />
         ))}
       </div>
     </div>
+  );
+}
+
+/** Genre chips for movies or shows; each opens that genre's full list. */
+function GenreBrowser() {
+  const [type, setType] = useState<"movie" | "tv">("movie");
+  const genres = useSeerrGenres(type);
+  // No list to browse (Seerr can't say): leave the section out rather than show an empty box.
+  if (genres.isError || (genres.data && genres.data.length === 0)) return null;
+  return (
+    <section aria-label="Browse by genre" className={GUTTER}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-xl font-bold tracking-tight sm:text-[22px]">Browse by genre</h2>
+        <SegmentedControl<"movie" | "tv"> aria-label="Genres for" value={type} onChange={setType} segments={[{ value: "movie", label: "Movies" }, { value: "tv", label: "Shows" }]} />
+      </div>
+      <ul className="flex flex-wrap gap-2" aria-busy={!genres.data}>
+        {genres.data
+          ? genres.data.map((g) => (
+              <li key={g.id}>
+                <Link href={`/discover/genre/${type}/${g.id}`} className="jelly-control inline-flex h-9 items-center rounded-full px-4 text-sm font-medium text-text">
+                  {g.name}
+                </Link>
+              </li>
+            ))
+          : Array.from({ length: 10 }, (_, i) => (
+              <li key={i} aria-hidden="true">
+                <Skeleton className="h-9 w-24 rounded-full" />
+              </li>
+            ))}
+      </ul>
+    </section>
   );
 }
 

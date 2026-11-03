@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
-import type { SeerrCredits, SeerrDiscoverKind, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPage, SeerrPersonDetail, SeerrRequestBody, SeerrRequestResult, SeerrRequestRow, SeerrSearchResult } from "@/lib/seerr/types";
+import type { SeerrCredits, SeerrDiscoverKind, SeerrGenre, SeerrDetail, SeerrEpisode, SeerrItem, SeerrMediaType, SeerrPage, SeerrPersonDetail, SeerrRequestBody, SeerrRequestResult, SeerrRequestRow, SeerrSearchResult } from "@/lib/seerr/types";
 import { hydrationSafe, useJfQuery } from "./use-jf-query";
 import { useIsClient } from "@/lib/use-is-client";
 
@@ -10,6 +10,7 @@ export const seerrKeys = {
   all: ["seerr"] as const,
   status: ["seerr", "status"] as const,
   requests: ["seerr", "requests"] as const,
+  genres: (type: SeerrMediaType) => ["seerr", "genres", type] as const,
   discover: (kind: SeerrDiscoverKind) => ["seerr", "discover", kind] as const,
   search: (term: string) => ["seerr", "search", term] as const,
   detail: (type: SeerrMediaType, id: number) => ["seerr", "detail", type, id] as const,
@@ -99,6 +100,29 @@ export function useSeerrDiscoverPages(kind: SeerrDiscoverKind) {
     queryKey: [...seerrKeys.discover(kind), "pages"],
     initialPageParam: 1,
     queryFn: ({ signal, pageParam }) => apiFetch<SeerrPage>(`/api/seerr/discover/${kind}?page=${pageParam}`, { signal }),
+    getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
+    enabled: isClient,
+    staleTime: 10 * 60_000,
+  });
+  return hydrationSafe(q, isClient);
+}
+
+/** The genres Seerr can browse for movies or shows. */
+export function useSeerrGenres(type: SeerrMediaType) {
+  return useJfQuery<SeerrGenre[]>({
+    queryKey: seerrKeys.genres(type),
+    queryFn: async ({ signal }) => (await apiFetch<{ genres: SeerrGenre[] }>(`/api/seerr/genres/${type}`, { signal })).genres,
+    staleTime: 60 * 60_000,
+  });
+}
+
+/** Every page of the titles in one genre, loaded as you ask for more. */
+export function useSeerrGenrePages(type: SeerrMediaType, id: number) {
+  const isClient = useIsClient();
+  const q = useInfiniteQuery({
+    queryKey: ["seerr", "genre", type, id],
+    initialPageParam: 1,
+    queryFn: ({ signal, pageParam }) => apiFetch<SeerrPage>(`/api/seerr/discover/genre/${type}/${id}?page=${pageParam}`, { signal }),
     getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
     enabled: isClient,
     staleTime: 10 * 60_000,
