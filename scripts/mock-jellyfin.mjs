@@ -281,6 +281,8 @@ function shape(raw, opts = {}) {
     const blur = {};
     if (raw.Type === "Episode") blur.Primary = { [tags.Primary]: "LeHa9nRj%1Rj~QxY%1t7WB" };
     if (raw.Type === "Movie" || raw.Type === "Series") tags.Thumb = tagFor(id, "Thumb");
+    // One show has title art, so the pages that borrow a library logo can be tested; the rest show their name.
+    if (id === "s002") tags.Logo = tagFor(id, "Logo");
     out.ImageTags = tags;
     if (Object.keys(blur).length) out.ImageBlurHashes = blur;
     if (raw.Type === "Movie" || raw.Type === "Series") {

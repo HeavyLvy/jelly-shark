@@ -203,6 +203,23 @@ test.describe("a title's page", () => {
 });
 
 test.describe("a show's page", () => {
+  test("a show that is partly in the library uses its library title art", async ({ page }) => {
+    await page.goto("/request/tv/9101");
+    const title = page.getByRole("heading", { level: 1, name: "Night Ferry" });
+    await expect(title).toBeVisible();
+    // The logo is an image from the library; the name stays for screen readers.
+    const logo = title.locator("img");
+    await expect(logo).toHaveAttribute("src", /\/api\/jf\/.*Logo|Logo/);
+    await expect.poll(() => logo.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+  });
+
+  test("a show with no library art keeps its written title", async ({ page }) => {
+    await page.goto("/request/tv/9102");
+    const title = page.getByRole("heading", { level: 1, name: "Long Haul" });
+    await expect(title).toBeVisible();
+    await expect(title.locator("img")).toHaveCount(0);
+  });
+
   test("has its seasons and episodes like a library show", async ({ page }) => {
     await page.goto("/request/tv/9101");
     const facts = page.getByRole("list", { name: "Title facts" });

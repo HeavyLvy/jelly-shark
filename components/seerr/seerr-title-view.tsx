@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { Check, Clapperboard, Clock, Download, Plus, Tv } from "lucide-react";
 import { DetailSkeleton, GUTTER, HeroFrame } from "@/components/detail/detail-hero";
 import { InfoPanel, type InfoRow } from "@/components/detail/info-panel";
-import { HeroBackdropFrame, PlayButton } from "@/components/media/hero";
+import { HeroBackdropFrame, PlayButton, TitleTreatment } from "@/components/media/hero";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError } from "@/lib/api-client";
 import { formatRating } from "@/lib/format";
+import { pickImage } from "@/lib/jellyfin/images";
+import { useItem } from "@/lib/queries/items";
 import { seerrImageSrc, useSeerrDetail, useSeerrRequest, useSeerrRequests } from "@/lib/queries/seerr";
 import { watchHref } from "@/lib/routes";
 import { formatDay, formatMinutes, formatMoney, languageName, plural, yearsOf } from "@/lib/seerr/format";
@@ -99,6 +101,9 @@ function TitleDetail({ detail: d }: { detail: SeerrDetail }) {
   const isTv = item.mediaType === "tv";
   const request = useSeerrRequest();
   const [picker, setPicker] = useState(false);
+  // A show that is partly in the library stays on this page, so borrow the library's title logo to match the library page.
+  const libraryItem = useItem(d.jellyfinId).data;
+  const hasLogo = !!libraryItem && pickImage(libraryItem, "logo") !== null;
   // Your own requests for this title that nobody has approved yet; those can still be taken back.
   const mine = useSeerrRequests();
   const waitingIds = mine.data?.filter((r) => r.state === "waiting" && r.mediaType === item.mediaType && r.tmdbId === item.id).map((r) => r.id) ?? [];
@@ -169,7 +174,15 @@ function TitleDetail({ detail: d }: { detail: SeerrDetail }) {
         back={{ href: "/search", label: "Search" }}
         historyBack
         title={
-          <h1 className="font-display text-5xl leading-[0.95] font-extrabold tracking-display text-balance sm:text-6xl lg:text-7xl lg:text-8xl xl:text-[7.25rem]">{item.title}</h1>
+          hasLogo ? (
+            // Same logo box as the library page's hero.
+            <TitleTreatment
+              item={{ ...libraryItem, Name: item.title }}
+              className="lg:text-8xl xl:text-[7.25rem] [&>span[aria-hidden]]:h-28 [&>span[aria-hidden]]:max-w-[34rem] sm:[&>span[aria-hidden]]:h-40 lg:[&>span[aria-hidden]]:h-52"
+            />
+          ) : (
+            <h1 className="font-display text-5xl leading-[0.95] font-extrabold tracking-display text-balance sm:text-6xl lg:text-7xl lg:text-8xl xl:text-[7.25rem]">{item.title}</h1>
+          )
         }
         certification={d.certification}
         years={yearsOf(d)}
